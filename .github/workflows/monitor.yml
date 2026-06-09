@@ -1,0 +1,45 @@
+name: Monitor Vagas ONU Brasil
+
+on:
+  schedule:
+    # A cada 2 dias às 09:00 horário de Brasília (12:00 UTC)
+    # GitHub Actions usa UTC. BRT = UTC-3
+    - cron: "0 12 */2 * *"
+  workflow_dispatch:   # permite rodar manualmente pelo GitHub
+
+permissions:
+  contents: write      # necessário para commitar seen_jobs.json atualizado
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repositório
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Instalar dependências
+        run: pip install -r requirements.txt
+
+      - name: Executar scraper
+        env:
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          EMAIL_TO:  ${{ secrets.EMAIL_TO }}
+        run: python scraper.py
+
+      - name: Salvar seen_jobs.json (commitar se mudou)
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add seen_jobs.json || true
+          git diff --cached --quiet || git commit -m "chore: atualiza seen_jobs [skip ci]"
+          git push
