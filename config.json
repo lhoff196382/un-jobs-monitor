@@ -25,6 +25,13 @@
       "enabled": true,
       "notes": "",
       "keywords": []
+    },
+    {
+      "name": "UNITALENT",
+      "url": "https://untalent.org/jobs",
+      "enabled": true,
+      "notes": "",
+      "keywords": []
     }
   ],
   "email": {
