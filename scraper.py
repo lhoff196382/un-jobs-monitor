@@ -237,44 +237,68 @@ def fetch_onu_brasil(_keywords: list) -> list[dict]:
 
 
 def fetch_iadb(_keywords: list) -> list[dict]:
-    """BID/IADB — vagas do Banco Interamericano de Desenvolvimento."""
+    """BID/IADB — vagas via RSS público (não requer JS)."""
     print("  Verificando: BID (jobs.iadb.org)")
-    # API do Taleo usada pelo BID
-    try:
-        api_url = "https://jobs.iadb.org/listjobs/GetJobListings"
-        params = {"BusinessUnitCode": "IADB", "Country": "BRA", "pageNumber": 1}
-        resp = requests.get(api_url, params=params, headers=HEADERS, timeout=REQUEST_TIMEOUT)
-        if resp.status_code == 200:
-            data = resp.json()
-            jobs = []
-            for item in data.get("requisitionList", []):
-                title = item.get("title", "")
-                jid = item.get("contestNo", "")
-                location = item.get("primaryLocation", "Brazil")
-                url = f"https://jobs.iadb.org/en/job/{jid}" if jid else "https://jobs.iadb.org/en"
-                if title:
-                    jobs.append({"title": title, "url": url, "source": "BID/IADB", "location": location})
+
+    # RSS feed público do BID — mais confiável que a API interna
+    rss_urls = [
+        "https://jobs.iadb.org/en/rss?CountryCodes=BRA",
+        "https://jobs.iadb.org/rss?CountryCodes=BRA",
+    ]
+    for rss_url in rss_urls:
+        try:
+            resp = requests.get(rss_url, headers=HEADERS, timeout=REQUEST_TIMEOUT)
+            if resp.status_code == 200 and ("<item>" in resp.text or "<entry>" in resp.text):
+                soup = BeautifulSoup(resp.text, "xml")
+                jobs = []
+                for item in soup.find_all("item") or soup.find_all("entry"):
+                    title_tag = item.find("title")
+                    link_tag  = item.find("link")
+                    loc_tag   = item.find("location") or item.find("country")
+                    title    = title_tag.get_text(strip=True) if title_tag else ""
+                    href     = link_tag.get_text(strip=True) if link_tag else ""
+                    location = loc_tag.get_text(strip=True) if loc_tag else "Brazil"
+                    if title and href:
+                        jobs.append({"title": title, "url": href, "source": "BID/IADB", "location": location})
+                if jobs:
+                    print(f"    -> {len(jobs)} vaga(s) encontrada(s)")
+                    return jobs
+        except Exception:
+            pass
+
+    # Fallback: scraping direto da página de resultados
+    search_urls = [
+        "https://jobs.iadb.org/en/search-results#CountryCodes=BRA",
+        "https://jobs.iadb.org/en/search-results?CountryCodes=BRA",
+        "https://www.iadb.org/en/careers/job-opportunities",
+    ]
+    for url in search_urls:
+        soup = fetch_html(url)
+        if not soup:
+            continue
+        jobs = []
+        selectors = [
+            "a.jobTitle-link", "h2.jobTitle a", ".jobTitle a",
+            "a[href*='/en/job/']", "a[href*='/job/']",
+            ".job-title a", "li.job a", "div.job a",
+        ]
+        seen: set[str] = set()
+        for sel in selectors:
+            for link in soup.select(sel):
+                title = link.get_text(strip=True)
+                href  = link.get("href", "")
+                if not title or len(title) < 8 or href in seen:
+                    continue
+                seen.add(href)
+                if not href.startswith("http"):
+                    href = "https://jobs.iadb.org" + href
+                jobs.append({"title": title, "url": href, "source": "BID/IADB", "location": "Brazil"})
+        if jobs:
             print(f"    -> {len(jobs)} vaga(s) encontrada(s)")
             return jobs
-    except Exception:
-        pass
 
-    # Fallback HTML
-    soup = fetch_html("https://jobs.iadb.org/en/search-results?keywords=&CountryCodes=BRA")
-    if not soup:
-        print("    -> 0 vaga(s) encontrada(s)")
-        return []
-    jobs = []
-    for link in soup.select("a.jobTitle-link, h2.jobTitle a, .jobTitle a, a[href*='/job/']"):
-        title = link.get_text(strip=True)
-        href = link.get("href", "")
-        if not title or len(title) < 6:
-            continue
-        if not href.startswith("http"):
-            href = "https://jobs.iadb.org" + href
-        jobs.append({"title": title, "url": href, "source": "BID/IADB", "location": "Brazil"})
-    print(f"    -> {len(jobs)} vaga(s) encontrada(s)")
-    return jobs
+    print("    -> 0 vaga(s) encontrada(s) [site pode usar JS — tente adicionar RSS manualmente]")
+    return []
 
 
 UNTALENT_BRAZIL_TERMS = ["brazil", "brasil", "brasilia", "brasília",
@@ -285,12 +309,28 @@ def fetch_untalent(keywords: list) -> list[dict]:
     """UNTalent.org — somente vagas no Brasil, filtradas por keywords da fonte."""
     print("  Verificando: UNTalent.org (Brasil / Consultant / Senior)")
 
+    def extract_location_from_title(title: str) -> str:
+        """Extrai localização quando está no título: 'Cargo - Cidade, País'."""
+        if " - " in title:
+            last_part = title.rsplit(" - ", 1)[-1]
+            if "," in last_part:
+                return last_part.strip()
+        return ""
+
+    def is_brazil_location(location: str) -> bool:
+        return any(t in location.lower() for t in UNTALENT_BRAZIL_TERMS)
+
     def passes_filter(title: str, location: str) -> bool:
-        # Local deve ser Brasil
-        loc_ok = not location or any(t in location.lower() for t in UNTALENT_BRAZIL_TERMS)
+        # Rejeita títulos genéricos (muito curtos ou sem espaço = palavra única)
+        if len(title) < 20 or " " not in title.strip():
+            return False
+        # Extrai local do título se não fornecido
+        loc = location or extract_location_from_title(title)
+        # Se conseguiu extrair local do título, deve ser Brasil
+        if loc and not is_brazil_location(loc):
+            return False
         # Título deve conter ao menos uma keyword (se definidas)
-        title_ok = not keywords or contains_keyword(title, keywords)
-        return loc_ok and title_ok
+        return not keywords or contains_keyword(title, keywords)
 
     # Tenta API JSON primeiro
     try:
@@ -303,11 +343,12 @@ def fetch_untalent(keywords: list) -> list[dict]:
             jobs = []
             items = data if isinstance(data, list) else data.get("jobs", data.get("data", []))
             for item in items:
-                title = item.get("title", item.get("name", ""))
-                url = item.get("url", item.get("link", "https://untalent.org/jobs"))
-                location = item.get("location", item.get("duty_station", "Brazil"))
+                title    = item.get("title", item.get("name", ""))
+                url      = item.get("url", item.get("link", "https://untalent.org/jobs"))
+                location = item.get("location", item.get("duty_station", ""))
                 if title and passes_filter(title, location):
-                    jobs.append({"title": title, "url": url, "source": "UNTalent.org", "location": location})
+                    display_loc = location or extract_location_from_title(title) or "Brazil"
+                    jobs.append({"title": title, "url": url, "source": "UNTalent.org", "location": display_loc})
             if jobs:
                 print(f"    -> {len(jobs)} vaga(s) encontrada(s)")
                 return jobs
@@ -320,15 +361,19 @@ def fetch_untalent(keywords: list) -> list[dict]:
         print("    -> 0 vaga(s) encontrada(s)")
         return []
     jobs = []
+    seen_hrefs: set[str] = set()
     for link in soup.select("a.job-link, .job-title a, h3 a, h2 a, a[href*='/jobs/']"):
         title = link.get_text(strip=True)
-        href = link.get("href", "")
-        if not title or len(title) < 6:
+        href  = link.get("href", "")
+        if not href or href in seen_hrefs:
             continue
+        seen_hrefs.add(href)
         if not href.startswith("http"):
             href = "https://untalent.org" + href
-        if passes_filter(title, "Brazil"):
-            jobs.append({"title": title, "url": href, "source": "UNTalent.org", "location": "Brazil"})
+        loc = extract_location_from_title(title)
+        if passes_filter(title, loc):
+            jobs.append({"title": title, "url": href, "source": "UNTalent.org",
+                         "location": loc or "Brazil"})
     print(f"    -> {len(jobs)} vaga(s) encontrada(s)")
     return jobs
 
