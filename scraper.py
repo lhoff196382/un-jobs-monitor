@@ -73,11 +73,21 @@ def fetch_html(url: str) -> BeautifulSoup | None:
         return None
 
 
+BRAZIL_TERMS = [
+    "brazil", "brasil", "brasilia", "brasília", "br ",
+    "são paulo", "sao paulo", "rio de janeiro", "recife",
+    "salvador", "fortaleza", "manaus", "belo horizonte",
+    "curitiba", "porto alegre", "belém", "belem", "goiânia",
+    "goiania", "natal", "maceió", "maceio", "teresina",
+    "campo grande", "joão pessoa", "joao pessoa", "aracaju",
+    "rondônia", "rondonia", "remote (brazil", "remoto (brazil",
+    "work from brazil", "home-based (brazil",
+]
+
+
 def _is_brazil(location: str) -> bool:
     loc = location.lower()
-    return any(x in loc for x in ["brazil", "brasil", "brasilia", "brasília",
-                                   "são paulo", "rio de janeiro", "recife",
-                                   "salvador", "fortaleza", "manaus", "belo horizonte"])
+    return any(x in loc for x in BRAZIL_TERMS)
 
 
 # ---------------------------------------------------------------------------
@@ -326,12 +336,18 @@ def fetch_iadb(_keywords: list) -> list[dict]:
             print(f"    -> {len(jobs)} vaga(s) encontrada(s) [HTML]")
             return jobs
 
-    print("    -> 0 vaga(s) [BID usa JS — verifique manualmente: https://jobs.iadb.org/en/search-results#CountryCodes=BRA]")
-    return []
+    # Site usa JavaScript — retorna link fixo para consulta manual no e-mail
+    print("    -> Site BID usa JavaScript. Incluindo link direto no e-mail.")
+    return [{
+        "title": "BID/IADB — Clique aqui para ver todas as vagas no Brasil",
+        "url": "https://jobs.iadb.org/en/search-results#CountryCodes=BRA",
+        "source": "BID/IADB",
+        "location": "Brazil",
+        "_manual": True,
+    }]
 
 
-UNTALENT_BRAZIL_TERMS = ["brazil", "brasil", "brasilia", "brasília",
-                         "são paulo", "rio de janeiro", "recife", "belo horizonte"]
+UNTALENT_BRAZIL_TERMS = BRAZIL_TERMS  # reutiliza lista centralizada
 
 
 def fetch_untalent(keywords: list) -> list[dict]:
@@ -493,7 +509,18 @@ def build_html_email(new_jobs: list[dict], run_date: str) -> str:
         rows = ""
         for j in sorted_jobs:
             location = j.get("location", "") or "—"
-            rows += f"""
+            if j.get("_manual"):
+                rows += f"""
+        <tr style="background:#fff8e1;">
+          <td colspan="3" style="padding:10px;border-bottom:1px solid #eee;">
+            <a href="{j['url']}" style="color:#e65100;font-weight:bold;">
+              &#128279; {j['title']}
+            </a>
+            <span style="font-size:.8rem;color:#888;margin-left:8px;">(verificação manual necessária — site usa JavaScript)</span>
+          </td>
+        </tr>"""
+            else:
+                rows += f"""
         <tr>
           <td style="padding:8px;border-bottom:1px solid #eee;">
             <a href="{j['url']}" style="color:#1a73e8;font-weight:bold;">{j['title']}</a>
@@ -599,6 +626,9 @@ def main() -> None:
     new_jobs = []
     updated_seen = set(seen)
     for job in all_jobs:
+        if job.get("_manual"):          # link fixo — sempre incluir, nunca marcar como visto
+            new_jobs.append(job)
+            continue
         jid = job_id(job["title"], job["url"], job["source"])
         if jid not in seen:
             job["id"] = jid
