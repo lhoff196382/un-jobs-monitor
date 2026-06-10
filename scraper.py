@@ -257,7 +257,7 @@ def build_html_email(new_jobs: list[dict], run_date: str) -> str:
 
 def send_email(subject: str, html_body: str, cfg: dict) -> None:
     smtp_host = os.environ["SMTP_HOST"]
-    smtp_port = int(os.environ.get("SMTP_PORT", "587"))
+    smtp_port = int(os.environ.get("SMTP_PORT") or "587")
     smtp_user = os.environ["SMTP_USER"]
     smtp_pass = os.environ["SMTP_PASS"]
     to_addr = os.environ.get("EMAIL_TO") or cfg["email"]["to"]
