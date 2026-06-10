@@ -96,17 +96,20 @@ def _is_brazil(location: str) -> bool:
 
 def fetch_reliefweb(_keywords: list) -> list[dict]:
     print("  Verificando: ReliefWeb API (Brasil)")
-    url = "https://api.reliefweb.int/v1/jobs"
-    params = {
-        "appname": "un-jobs-monitor",
-        "filter[field]": "country.name",
-        "filter[value]": "Brazil",
-        "fields[include][]": ["title", "url", "source.name", "city.name", "country.name"],
+    url = "https://api.reliefweb.int/v1/jobs?appname=un-jobs-monitor"
+    payload = {
+        "filter": {
+            "operator": "AND",
+            "conditions": [{"field": "country.name", "value": "Brazil"}]
+        },
+        "fields": {"include": ["title", "url", "source.name", "city.name", "country.name"]},
         "limit": 50,
-        "sort[]": "date.created:desc",
+        "sort": ["date.created:desc"]
     }
     try:
-        resp = requests.get(url, params=params, timeout=REQUEST_TIMEOUT)
+        resp = requests.post(url, json=payload,
+                             headers={**HEADERS, "Content-Type": "application/json"},
+                             timeout=REQUEST_TIMEOUT)
         resp.raise_for_status()
         data = resp.json()
         jobs = []
@@ -130,7 +133,14 @@ def fetch_reliefweb(_keywords: list) -> list[dict]:
 
 def fetch_unjobs_org(_keywords: list) -> list[dict]:
     print("  Verificando: UNJobs.org (agregador ONU)")
-    soup = fetch_html("https://unjobs.org/duty_stations/brazil")
+    try:
+        resp = requests.get("https://unjobs.org/duty_stations/brazil",
+                            headers=HEADERS, timeout=60)
+        resp.raise_for_status()
+        soup = BeautifulSoup(resp.text, "html.parser")
+    except requests.RequestException as e:
+        print(f"  [ERRO] UNJobs.org: {e}")
+        return []
     if not soup:
         return []
     jobs = []
@@ -332,15 +342,24 @@ def fetch_iadb(_keywords: list) -> list[dict]:
             print(f"    -> {len(jobs)} vaga(s) encontrada(s) [HTML]")
             return jobs
 
-    # Site usa JavaScript — link direto para consulta manual
-    print("    -> BID usa JavaScript. Incluindo link direto no e-mail.")
-    return [{
-        "title": "BID/IADB — Ver todas as vagas (filtrar por Brazil/Brasil)",
-        "url": "https://www.iadb.org/en/careers/all-jobs",
-        "source": "BID/IADB",
-        "location": "Brazil",
-        "_manual": True,
-    }]
+    # Site bloqueia scraper — link direto para consulta manual
+    print("    -> BID bloqueia scraper. Incluindo link direto no e-mail.")
+    return [
+        {
+            "title": "BID/IADB — Vagas de Consultor (clique e filtre por City: Brazil)",
+            "url": "https://www.iadb.org/en/careers/consultant-opportunities",
+            "source": "BID/IADB",
+            "location": "Brazil",
+            "_manual": True,
+        },
+        {
+            "title": "BID/IADB — Todas as vagas (clique e filtre por City: Brazil)",
+            "url": "https://www.iadb.org/en/careers/all-jobs",
+            "source": "BID/IADB",
+            "location": "Brazil",
+            "_manual": True,
+        },
+    ]
 
 
 UNTALENT_BRAZIL_TERMS = BRAZIL_TERMS  # reutiliza lista centralizada
