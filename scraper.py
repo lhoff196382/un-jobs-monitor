@@ -207,26 +207,37 @@ def fetch_onu_brasil(_keywords: list) -> list[dict]:
         except Exception:
             pass
 
-    # Fallback: scraping HTML — tenta extrair vagas da página estática
+    # Fallback: scraping HTML
     soup = fetch_html("https://brasil.un.org/pt-br/jobs")
     if not soup:
         print("    -> 0 vaga(s) encontrada(s)")
         return []
 
+    # Termos que indicam links de navegação (não são vagas)
+    NAV_BLOCKLIST = [
+        "português", "english", "español", "ver todos", "saiba mais",
+        "leia mais", "read more", "see all", "apply now", "login",
+        "cadastre", "home", "menu", "contato", "sobre",
+    ]
+
     jobs = []
-    today = datetime.now().strftime("%Y-%m-%d")
     seen_hrefs: set[str] = set()
 
     for link in soup.find_all("a", href=True):
-        href = link["href"]
+        href  = link["href"]
         title = link.get_text(strip=True)
-        if not title or len(title) < 8:
+
+        # Descarta títulos curtos ou de navegação
+        if not title or len(title) < 15:
+            continue
+        if any(b in title.lower() for b in NAV_BLOCKLIST):
             continue
         if href in seen_hrefs:
             continue
-        # Filtra links que parecem vagas (contêm /jobs/ ou /vacancy/ na URL)
-        if not any(x in href for x in ["/job", "/vacancy", "/vaga", "/oportunidade"]):
+        # Aceita somente links que parecem vagas
+        if not any(x in href for x in ["/job", "/vacancy", "/vaga", "/oportunidade", "/node/"]):
             continue
+
         seen_hrefs.add(href)
         if not href.startswith("http"):
             href = "https://brasil.un.org" + href
@@ -237,53 +248,71 @@ def fetch_onu_brasil(_keywords: list) -> list[dict]:
 
 
 def fetch_iadb(_keywords: list) -> list[dict]:
-    """BID/IADB — vagas via RSS público (não requer JS)."""
-    print("  Verificando: BID (jobs.iadb.org)")
+    """BID/IADB — todas as vagas no Brasil via API interna e fallbacks."""
+    print("  Verificando: BID/IADB (todas as vagas no Brasil)")
 
-    # RSS feed público do BID — mais confiável que a API interna
-    rss_urls = [
-        "https://jobs.iadb.org/en/rss?CountryCodes=BRA",
-        "https://jobs.iadb.org/rss?CountryCodes=BRA",
+    jobs: list[dict] = []
+
+    # 1) API interna do iCIMS (sistema ATS do BID)
+    api_attempts = [
+        ("GET",  "https://jobs.iadb.org/api/jobs/search?country=BRA&limit=100", {}),
+        ("GET",  "https://jobs.iadb.org/api/search?CountryCodes=BRA&pageSize=100", {}),
+        ("POST", "https://jobs.iadb.org/api/jobs/search", {"country": "BRA", "pageSize": 100}),
     ]
-    for rss_url in rss_urls:
+    for method, url, body in api_attempts:
         try:
-            resp = requests.get(rss_url, headers=HEADERS, timeout=REQUEST_TIMEOUT)
-            if resp.status_code == 200 and ("<item>" in resp.text or "<entry>" in resp.text):
-                soup = BeautifulSoup(resp.text, "xml")
-                jobs = []
-                for item in soup.find_all("item") or soup.find_all("entry"):
-                    title_tag = item.find("title")
-                    link_tag  = item.find("link")
-                    loc_tag   = item.find("location") or item.find("country")
-                    title    = title_tag.get_text(strip=True) if title_tag else ""
-                    href     = link_tag.get_text(strip=True) if link_tag else ""
-                    location = loc_tag.get_text(strip=True) if loc_tag else "Brazil"
+            if method == "POST":
+                resp = requests.post(url, json=body, headers={**HEADERS, "Content-Type": "application/json"}, timeout=REQUEST_TIMEOUT)
+            else:
+                resp = requests.get(url, headers=HEADERS, timeout=REQUEST_TIMEOUT)
+            if resp.status_code == 200 and "application/json" in resp.headers.get("content-type", ""):
+                data = resp.json()
+                items = (data if isinstance(data, list)
+                         else data.get("jobs", data.get("requisitions", data.get("data", []))))
+                for item in items:
+                    title    = item.get("title", item.get("jobTitle", ""))
+                    href     = item.get("url", item.get("applyUrl", item.get("detailUrl", "")))
+                    location = item.get("location", item.get("primaryLocation", "Brazil"))
                     if title and href:
+                        if not href.startswith("http"):
+                            href = "https://jobs.iadb.org" + href
                         jobs.append({"title": title, "url": href, "source": "BID/IADB", "location": location})
                 if jobs:
-                    print(f"    -> {len(jobs)} vaga(s) encontrada(s)")
+                    print(f"    -> {len(jobs)} vaga(s) encontrada(s) [API]")
                     return jobs
         except Exception:
             pass
 
-    # Fallback: scraping direto da página de resultados
-    search_urls = [
-        "https://jobs.iadb.org/en/search-results#CountryCodes=BRA",
+    # 2) RSS
+    for rss in ["https://jobs.iadb.org/en/rss?CountryCodes=BRA",
+                "https://jobs.iadb.org/rss?CountryCodes=BRA"]:
+        try:
+            resp = requests.get(rss, headers=HEADERS, timeout=REQUEST_TIMEOUT)
+            if resp.status_code == 200 and "<item>" in resp.text:
+                soup = BeautifulSoup(resp.text, "xml")
+                for item in soup.find_all("item"):
+                    title = (item.find("title") or {}).get_text(strip=True) if item.find("title") else ""
+                    href  = (item.find("link")  or {}).get_text(strip=True) if item.find("link")  else ""
+                    if title and href:
+                        jobs.append({"title": title, "url": href, "source": "BID/IADB", "location": "Brazil"})
+                if jobs:
+                    print(f"    -> {len(jobs)} vaga(s) encontrada(s) [RSS]")
+                    return jobs
+        except Exception:
+            pass
+
+    # 3) Scraping HTML das páginas de resultados
+    for url in [
         "https://jobs.iadb.org/en/search-results?CountryCodes=BRA",
-        "https://www.iadb.org/en/careers/job-opportunities",
-    ]
-    for url in search_urls:
+        "https://jobs.iadb.org/en/search-results?keywords=&CountryCodes=BRA",
+        "https://www.iadb.org/en/careers/job-opportunities?field_country_target_id=86",
+    ]:
         soup = fetch_html(url)
         if not soup:
             continue
-        jobs = []
-        selectors = [
-            "a.jobTitle-link", "h2.jobTitle a", ".jobTitle a",
-            "a[href*='/en/job/']", "a[href*='/job/']",
-            ".job-title a", "li.job a", "div.job a",
-        ]
         seen: set[str] = set()
-        for sel in selectors:
+        for sel in ["a.jobTitle-link", "h2.jobTitle a", ".jobTitle a",
+                    "a[href*='/en/job/']", "a[href*='/job/']", ".job-title a"]:
             for link in soup.select(sel):
                 title = link.get_text(strip=True)
                 href  = link.get("href", "")
@@ -294,10 +323,10 @@ def fetch_iadb(_keywords: list) -> list[dict]:
                     href = "https://jobs.iadb.org" + href
                 jobs.append({"title": title, "url": href, "source": "BID/IADB", "location": "Brazil"})
         if jobs:
-            print(f"    -> {len(jobs)} vaga(s) encontrada(s)")
+            print(f"    -> {len(jobs)} vaga(s) encontrada(s) [HTML]")
             return jobs
 
-    print("    -> 0 vaga(s) encontrada(s) [site pode usar JS — tente adicionar RSS manualmente]")
+    print("    -> 0 vaga(s) [BID usa JS — verifique manualmente: https://jobs.iadb.org/en/search-results#CountryCodes=BRA]")
     return []
 
 
@@ -321,13 +350,13 @@ def fetch_untalent(keywords: list) -> list[dict]:
         return any(t in location.lower() for t in UNTALENT_BRAZIL_TERMS)
 
     def passes_filter(title: str, location: str) -> bool:
-        # Rejeita títulos genéricos (muito curtos ou sem espaço = palavra única)
+        # Rejeita títulos genéricos (muito curtos ou palavra única)
         if len(title) < 20 or " " not in title.strip():
             return False
-        # Extrai local do título se não fornecido
-        loc = location or extract_location_from_title(title)
-        # Se conseguiu extrair local do título, deve ser Brasil
-        if loc and not is_brazil_location(loc):
+        # Determina localização: campo location > extraído do título > nenhuma
+        loc = location.strip() if location else extract_location_from_title(title)
+        # Localização deve ser confirmadamente Brasil — sem confirmação, rejeita
+        if not loc or not is_brazil_location(loc):
             return False
         # Título deve conter ao menos uma keyword (se definidas)
         return not keywords or contains_keyword(title, keywords)
