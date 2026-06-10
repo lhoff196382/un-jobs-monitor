@@ -256,28 +256,41 @@ def build_html_email(new_jobs: list[dict], run_date: str) -> str:
 
 
 def send_email(subject: str, html_body: str, cfg: dict) -> None:
-    smtp_host = os.environ["SMTP_HOST"]
+    smtp_host = (os.environ.get("SMTP_HOST") or "").strip()
     smtp_port = int(os.environ.get("SMTP_PORT") or "587")
-    smtp_user = os.environ["SMTP_USER"]
-    smtp_pass = os.environ["SMTP_PASS"]
-    to_addr = os.environ.get("EMAIL_TO") or cfg["email"]["to"]
+    smtp_user = (os.environ.get("SMTP_USER") or "").strip()
+    smtp_pass = (os.environ.get("SMTP_PASS") or "").strip()
+    to_addr   = (os.environ.get("EMAIL_TO")  or cfg["email"]["to"]).strip()
 
+    print(f"[DEBUG] SMTP host={smtp_host!r} port={smtp_port} user={smtp_user!r} to={to_addr!r}")
+
+    if not smtp_host or not smtp_user or not smtp_pass:
+        print("[AVISO] Credenciais SMTP incompletas (SMTP_HOST, SMTP_USER ou SMTP_PASS vazios).")
+        return
     if not to_addr:
         print("[AVISO] EMAIL_TO não configurado. E-mail não enviado.")
         return
 
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
-    msg["From"] = smtp_user
-    msg["To"] = to_addr
+    msg["From"]    = smtp_user
+    msg["To"]      = to_addr
     msg.attach(MIMEText(html_body, "html", "utf-8"))
 
-    with smtplib.SMTP(smtp_host, smtp_port) as server:
+    server = smtplib.SMTP(smtp_host, smtp_port, timeout=30)
+    try:
+        server.ehlo()
         server.starttls()
+        server.ehlo()
         server.login(smtp_user, smtp_pass)
         server.sendmail(smtp_user, to_addr, msg.as_string())
-
-    print(f"[OK] E-mail enviado para {to_addr}")
+        print(f"[OK] E-mail enviado para {to_addr}")
+    except smtplib.SMTPAuthenticationError:
+        print("[ERRO] Autenticação falhou — verifique SMTP_USER e SMTP_PASS.")
+        print("       Para Gmail use uma Senha de App em: myaccount.google.com/apppasswords")
+        raise
+    finally:
+        server.quit()
 
 
 # ---------------------------------------------------------------------------
