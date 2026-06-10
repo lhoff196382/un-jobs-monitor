@@ -175,10 +175,172 @@ def fetch_undp(_keywords: list) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
+# Parsers específicos para fontes conhecidas
+# ---------------------------------------------------------------------------
+
+def fetch_onu_brasil(_keywords: list) -> list[dict]:
+    """ONU Brasil — API JSON do site brasil.un.org (somente vagas abertas)."""
+    print("  Verificando: ONU Brasil (brasil.un.org)")
+    # Tenta endpoint JSON do Drupal Views
+    endpoints = [
+        "https://brasil.un.org/pt-br/jobs?_format=json",
+        "https://brasil.un.org/en/jobs?_format=json",
+    ]
+    for endpoint in endpoints:
+        try:
+            resp = requests.get(endpoint, headers=HEADERS, timeout=REQUEST_TIMEOUT)
+            if resp.status_code == 200 and resp.headers.get("content-type", "").startswith("application/json"):
+                data = resp.json()
+                jobs = []
+                items = data if isinstance(data, list) else data.get("rows", data.get("data", []))
+                for item in items:
+                    title = item.get("title", item.get("name", ""))
+                    url = item.get("url", item.get("link", item.get("path", "")))
+                    deadline = item.get("field_deadline", item.get("deadline", ""))
+                    if not title:
+                        continue
+                    if not url.startswith("http"):
+                        url = "https://brasil.un.org" + url
+                    jobs.append({"title": title, "url": url, "source": "ONU Brasil", "location": "Brazil", "deadline": deadline})
+                print(f"    -> {len(jobs)} vaga(s) encontrada(s)")
+                return jobs
+        except Exception:
+            pass
+
+    # Fallback: scraping HTML — tenta extrair vagas da página estática
+    soup = fetch_html("https://brasil.un.org/pt-br/jobs")
+    if not soup:
+        print("    -> 0 vaga(s) encontrada(s)")
+        return []
+
+    jobs = []
+    today = datetime.now().strftime("%Y-%m-%d")
+    seen_hrefs: set[str] = set()
+
+    for link in soup.find_all("a", href=True):
+        href = link["href"]
+        title = link.get_text(strip=True)
+        if not title or len(title) < 8:
+            continue
+        if href in seen_hrefs:
+            continue
+        # Filtra links que parecem vagas (contêm /jobs/ ou /vacancy/ na URL)
+        if not any(x in href for x in ["/job", "/vacancy", "/vaga", "/oportunidade"]):
+            continue
+        seen_hrefs.add(href)
+        if not href.startswith("http"):
+            href = "https://brasil.un.org" + href
+        jobs.append({"title": title, "url": href, "source": "ONU Brasil", "location": "Brazil"})
+
+    print(f"    -> {len(jobs)} vaga(s) encontrada(s)")
+    return jobs
+
+
+def fetch_iadb(_keywords: list) -> list[dict]:
+    """BID/IADB — vagas do Banco Interamericano de Desenvolvimento."""
+    print("  Verificando: BID (jobs.iadb.org)")
+    # API do Taleo usada pelo BID
+    try:
+        api_url = "https://jobs.iadb.org/listjobs/GetJobListings"
+        params = {"BusinessUnitCode": "IADB", "Country": "BRA", "pageNumber": 1}
+        resp = requests.get(api_url, params=params, headers=HEADERS, timeout=REQUEST_TIMEOUT)
+        if resp.status_code == 200:
+            data = resp.json()
+            jobs = []
+            for item in data.get("requisitionList", []):
+                title = item.get("title", "")
+                jid = item.get("contestNo", "")
+                location = item.get("primaryLocation", "Brazil")
+                url = f"https://jobs.iadb.org/en/job/{jid}" if jid else "https://jobs.iadb.org/en"
+                if title:
+                    jobs.append({"title": title, "url": url, "source": "BID/IADB", "location": location})
+            print(f"    -> {len(jobs)} vaga(s) encontrada(s)")
+            return jobs
+    except Exception:
+        pass
+
+    # Fallback HTML
+    soup = fetch_html("https://jobs.iadb.org/en/search-results?keywords=&CountryCodes=BRA")
+    if not soup:
+        print("    -> 0 vaga(s) encontrada(s)")
+        return []
+    jobs = []
+    for link in soup.select("a.jobTitle-link, h2.jobTitle a, .jobTitle a, a[href*='/job/']"):
+        title = link.get_text(strip=True)
+        href = link.get("href", "")
+        if not title or len(title) < 6:
+            continue
+        if not href.startswith("http"):
+            href = "https://jobs.iadb.org" + href
+        jobs.append({"title": title, "url": href, "source": "BID/IADB", "location": "Brazil"})
+    print(f"    -> {len(jobs)} vaga(s) encontrada(s)")
+    return jobs
+
+
+def fetch_untalent(_keywords: list) -> list[dict]:
+    """UNTalent.org — agregador de vagas ONU."""
+    print("  Verificando: UNTalent.org")
+    # Tenta API JSON primeiro
+    try:
+        resp = requests.get(
+            "https://untalent.org/api/jobs?location=Brazil&limit=50",
+            headers=HEADERS, timeout=REQUEST_TIMEOUT
+        )
+        if resp.status_code == 200 and "application/json" in resp.headers.get("content-type", ""):
+            data = resp.json()
+            jobs = []
+            items = data if isinstance(data, list) else data.get("jobs", data.get("data", []))
+            for item in items:
+                title = item.get("title", item.get("name", ""))
+                url = item.get("url", item.get("link", "https://untalent.org/jobs"))
+                location = item.get("location", item.get("duty_station", "Brazil"))
+                if title:
+                    jobs.append({"title": title, "url": url, "source": "UNTalent.org", "location": location})
+            if jobs:
+                print(f"    -> {len(jobs)} vaga(s) encontrada(s)")
+                return jobs
+    except Exception:
+        pass
+
+    # Fallback HTML
+    soup = fetch_html("https://untalent.org/jobs?location=Brazil")
+    if not soup:
+        print("    -> 0 vaga(s) encontrada(s)")
+        return []
+    jobs = []
+    for link in soup.select("a.job-link, .job-title a, h3 a, h2 a, a[href*='/jobs/']"):
+        title = link.get_text(strip=True)
+        href = link.get("href", "")
+        if not title or len(title) < 6:
+            continue
+        if not href.startswith("http"):
+            href = "https://untalent.org" + href
+        jobs.append({"title": title, "url": href, "source": "UNTalent.org", "location": "Brazil"})
+    print(f"    -> {len(jobs)} vaga(s) encontrada(s)")
+    return jobs
+
+
+# Mapa de parsers específicos por nome (case-insensitive)
+SPECIFIC_PARSERS = {
+    "onu brasil":  fetch_onu_brasil,
+    "bid":         fetch_iadb,
+    "iadb":        fetch_iadb,
+    "unitalent":   fetch_untalent,
+    "untalent":    fetch_untalent,
+}
+
+# ---------------------------------------------------------------------------
 # Parser genérico para URLs manuais
 # ---------------------------------------------------------------------------
 
 def fetch_custom_url(source: dict, keywords: list) -> list[dict]:
+    name_key = source["name"].lower().strip()
+
+    # Usa parser específico se disponível
+    for key, parser in SPECIFIC_PARSERS.items():
+        if key in name_key:
+            return parser(keywords)
+
     print(f"  Verificando: {source['name']} (URL customizada)")
     soup = fetch_html(source["url"])
     if not soup:

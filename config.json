@@ -1,50 +1,29 @@
 {
   "keywords": [
-    "Brazil",
-    "Brasil",
-    "Brasília",
-    "Rio de Janeiro",
-    "São Paulo",
-    "consultant",
-    "consultoria",
-    "consultancy",
-    "contrato",
-    "contract",
-    "national",
-    "nacional",
-    "NPO",
-    "NOA",
-    "NOB",
-    "NOC",
-    "NOD"
+    "Brazil", "Brasil", "Brasília", "Rio de Janeiro", "São Paulo",
+    "consultant", "consultoria", "consultancy", "contrato", "contract",
+    "national", "nacional", "NPO", "NOA", "NOB", "NOC", "NOD"
   ],
   "custom_sources": [
-    {
-      "name": "UNJOBS",
-      "url": "https://unjobs.org/",
-      "enabled": true,
-      "notes": "",
-      "keywords": []
-    },
-    {
-      "name": "UNITALENT",
-      "url": "https://untalent.org/jobs",
-      "enabled": true,
-      "notes": "",
-      "keywords": []
-    },
-    {
-      "name": "BID",
-      "url": "https://www.iadb.org/pt-br",
-      "enabled": true,
-      "notes": "",
-      "keywords": []
-    },
     {
       "name": "ONU BRASIL",
       "url": "https://brasil.un.org/pt-br/jobs",
       "enabled": true,
-      "notes": "",
+      "notes": "Parser específico embutido — somente vagas abertas",
+      "keywords": []
+    },
+    {
+      "name": "BID",
+      "url": "https://jobs.iadb.org/en/search-results?keywords=&CountryCodes=BRA",
+      "enabled": true,
+      "notes": "Banco Interamericano de Desenvolvimento — parser específico embutido",
+      "keywords": []
+    },
+    {
+      "name": "UNITALENT",
+      "url": "https://untalent.org/jobs?location=Brazil",
+      "enabled": true,
+      "notes": "Agregador ONU — parser específico embutido",
       "keywords": []
     },
     {
