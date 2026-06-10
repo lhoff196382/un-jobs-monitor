@@ -1,81 +1,20 @@
 {
-  "sources": [
-    {
-      "name": "UNDP Jobs - Brazil",
-      "url": "https://jobs.undp.org/cj_view_jobs.cfm?curPage=1&f_job_type=0&f_date_submitted=0&f_country=105",
-      "type": "html",
-      "enabled": true,
-      "notes": "UNDP - Programa das Nações Unidas para o Desenvolvimento"
-    },
-    {
-      "name": "UN Careers - Brazil",
-      "url": "https://careers.un.org/lbw/home.aspx?viewtype=NJO&crit_location=BRA",
-      "type": "html",
-      "enabled": true,
-      "notes": "Secretaria das Nações Unidas"
-    },
-    {
-      "name": "UNICEF Jobs - Brazil",
-      "url": "https://jobs.unicef.org/en-us/listing/?location=Brazil",
-      "type": "html",
-      "enabled": true,
-      "notes": "Fundo das Nações Unidas para a Infância"
-    },
-    {
-      "name": "ILO Jobs - Brazil",
-      "url": "https://jobs.ilo.org/search/?createNewAlert=false&q=brazil&locationsearch=",
-      "type": "html",
-      "enabled": true,
-      "notes": "Organização Internacional do Trabalho"
-    },
-    {
-      "name": "FAO Employment",
-      "url": "https://www.fao.org/employment/vacancies/en/",
-      "type": "html",
-      "enabled": true,
-      "notes": "Organização para Agricultura e Alimentação"
-    },
-    {
-      "name": "PAHO/PAHO Careers",
-      "url": "https://www.paho.org/en/careers",
-      "type": "html",
-      "enabled": true,
-      "notes": "Organização Pan-Americana da Saúde"
-    },
-    {
-      "name": "UNESCO Jobs",
-      "url": "https://careers.unesco.org/search/?createNewAlert=false&q=brazil&locationsearch=",
-      "type": "html",
-      "enabled": true,
-      "notes": "Organização das Nações Unidas para Educação, Ciência e Cultura"
-    },
-    {
-      "name": "UNOPS Jobs - Brazil",
-      "url": "https://jobs.unops.org/Pages/ViewVacancy/VAC-List.aspx?mis=0&cf=1&pg=1&ta=0&loc=BRA",
-      "type": "html",
-      "enabled": true,
-      "notes": "Escritório das Nações Unidas de Serviços de Projetos"
-    },
-    {
-      "name": "UN Women Jobs",
-      "url": "https://jobs.unwomen.org/en-us/listing/?location=Brazil",
-      "type": "html",
-      "enabled": true,
-      "notes": "Entidade da ONU para Igualdade de Gênero"
-    },
-    {
-      "name": "World Bank Jobs - Brazil",
-      "url": "https://jobs.worldbank.org/en/jobs/search?term=brazil",
-      "type": "html",
-      "enabled": true,
-      "notes": "Banco Mundial (organismo vinculado à ONU)"
-    }
-  ],
   "keywords": [
     "Brazil", "Brasil", "Brasília", "Rio de Janeiro", "São Paulo",
     "consultant", "consultoria", "consultancy", "contrato", "contract",
     "national", "nacional", "NPO", "NOA", "NOB", "NOC", "NOD"
   ],
+
+  "custom_sources": [
+    {
+      "name": "Exemplo — Remova ou substitua este item",
+      "url": "https://exemplo.org/vagas",
+      "enabled": false,
+      "notes": "Cole aqui a URL de qualquer site de vagas que queira monitorar",
+      "keywords": []
+    }
+  ],
+
   "email": {
     "to": "",
     "subject_prefix": "[ONU Vagas Brasil]"

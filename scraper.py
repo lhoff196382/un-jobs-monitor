@@ -10,7 +10,7 @@ import hashlib
 import smtplib
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from pathlib import Path
@@ -31,6 +31,10 @@ HEADERS = {
 REQUEST_TIMEOUT = 30
 
 
+def now_utc() -> datetime:
+    return datetime.now(timezone.utc)
+
+
 def load_config() -> dict:
     with open(CONFIG_FILE, encoding="utf-8") as f:
         return json.load(f)
@@ -46,7 +50,7 @@ def load_seen() -> set:
 
 def save_seen(seen: set) -> None:
     with open(SEEN_FILE, "w", encoding="utf-8") as f:
-        json.dump({"ids": sorted(seen), "updated": datetime.utcnow().isoformat()}, f, indent=2)
+        json.dump({"ids": sorted(seen), "updated": now_utc().isoformat()}, f, indent=2)
 
 
 def job_id(title: str, url: str, source: str) -> str:
@@ -59,7 +63,7 @@ def contains_keyword(text: str, keywords: list) -> bool:
     return any(kw.lower() in text_lower for kw in keywords)
 
 
-def fetch_page(url: str) -> BeautifulSoup | None:
+def fetch_html(url: str) -> BeautifulSoup | None:
     try:
         resp = requests.get(url, headers=HEADERS, timeout=REQUEST_TIMEOUT)
         resp.raise_for_status()
@@ -70,50 +74,105 @@ def fetch_page(url: str) -> BeautifulSoup | None:
 
 
 # ---------------------------------------------------------------------------
-# Parsers específicos por site
+# Fontes via API (mais confiáveis)
 # ---------------------------------------------------------------------------
 
-def parse_undp(soup: BeautifulSoup, source: dict) -> list[dict]:
+def fetch_reliefweb(keywords: list) -> list[dict]:
+    """ReliefWeb API — vagas humanitárias ONU com filtro Brasil."""
+    print("  Verificando: ReliefWeb API (Brasil)")
+    url = "https://api.reliefweb.int/v1/jobs"
+    params = {
+        "appname": "un-jobs-monitor",
+        "filter[field]": "country.name",
+        "filter[value]": "Brazil",
+        "fields[include][]": ["title", "url", "source.name", "date.created"],
+        "limit": 50,
+        "sort[]": "date.created:desc",
+    }
+    try:
+        resp = requests.get(url, params=params, timeout=REQUEST_TIMEOUT)
+        resp.raise_for_status()
+        data = resp.json()
+        jobs = []
+        for item in data.get("data", []):
+            fields = item.get("fields", {})
+            title = fields.get("title", "")
+            job_url = fields.get("url", "")
+            source_name = fields.get("source", [{}])[0].get("name", "ReliefWeb")
+            if title:
+                jobs.append({
+                    "title": title,
+                    "url": job_url,
+                    "source": f"ReliefWeb / {source_name}",
+                })
+        print(f"    -> {len(jobs)} vaga(s) encontrada(s)")
+        return jobs
+    except Exception as e:
+        print(f"  [ERRO] ReliefWeb API: {e}")
+        return []
+
+
+def fetch_unjobs_org(keywords: list) -> list[dict]:
+    """UNJobs.org — agregador HTML de todas as vagas ONU."""
+    print("  Verificando: UNJobs.org (agregador ONU)")
+    soup = fetch_html("https://unjobs.org/duty_stations/brazil")
+    if not soup:
+        return []
     jobs = []
-    rows = soup.select("table tr")
-    for row in rows:
-        cells = row.find_all("td")
-        if len(cells) < 2:
-            continue
-        link = row.find("a")
+    for tag in soup.select("div.j, li.j, .job-title, h3 a, h2 a"):
+        link = tag if tag.name == "a" else tag.find("a")
         if not link:
             continue
         title = link.get_text(strip=True)
         href = link.get("href", "")
-        if href and not href.startswith("http"):
+        if not title or len(title) < 6:
+            continue
+        if not href.startswith("http"):
+            href = "https://unjobs.org" + href
+        jobs.append({"title": title, "url": href, "source": "UNJobs.org"})
+    print(f"    -> {len(jobs)} vaga(s) encontrada(s)")
+    return jobs
+
+
+def fetch_undp(keywords: list) -> list[dict]:
+    """UNDP Jobs — vagas do Programa das Nações Unidas para o Desenvolvimento."""
+    print("  Verificando: UNDP Jobs (Brasil)")
+    # Usando a URL de busca com país Brazil
+    soup = fetch_html(
+        "https://jobs.undp.org/cj_view_jobs.cfm?curPage=1&f_job_type=0"
+        "&f_date_submitted=0&f_country=105"
+    )
+    if not soup:
+        return []
+    jobs = []
+    for row in soup.select("table tr"):
+        link = row.find("a", href=True)
+        if not link:
+            continue
+        title = link.get_text(strip=True)
+        href = link["href"]
+        if not href.startswith("http"):
             href = "https://jobs.undp.org/" + href.lstrip("/")
-        if title:
-            jobs.append({"title": title, "url": href, "source": source["name"]})
+        if title and len(title) > 6:
+            jobs.append({"title": title, "url": href, "source": "UNDP"})
+    print(f"    -> {len(jobs)} vaga(s) encontrada(s)")
     return jobs
 
 
-def parse_unicef(soup: BeautifulSoup, source: dict) -> list[dict]:
-    jobs = []
-    for item in soup.select("li.job-listing, div.job-listing, article.job"):
-        link = item.find("a")
-        if not link:
-            continue
-        title = link.get_text(strip=True)
-        href = link.get("href", "")
-        if href and not href.startswith("http"):
-            href = "https://jobs.unicef.org" + href
-        if title:
-            jobs.append({"title": title, "url": href, "source": source["name"]})
-    return jobs
+# ---------------------------------------------------------------------------
+# Parser genérico para URLs manuais e demais fontes HTML
+# ---------------------------------------------------------------------------
 
+def fetch_custom_url(source: dict, keywords: list) -> list[dict]:
+    """Scraper genérico para URLs adicionadas manualmente no config.json."""
+    print(f"  Verificando: {source['name']} (URL customizada)")
+    soup = fetch_html(source["url"])
+    if not soup:
+        return []
 
-def parse_generic(soup: BeautifulSoup, source: dict, keywords: list) -> list[dict]:
-    """
-    Parser genérico: coleta todos os <a> cuja âncora contenha keywords relevantes
-    ou que estejam dentro de contêineres de vaga típicos.
-    """
     jobs = []
-    seen_hrefs = set()
+    seen_hrefs: set[str] = set()
+    base_domain = "/".join(source["url"].split("/")[:3])
 
     # Tenta seletores comuns de listagem de vagas
     selectors = [
@@ -122,6 +181,7 @@ def parse_generic(soup: BeautifulSoup, source: dict, keywords: list) -> list[dic
         "tr.job", "tr.vacancy",
         "article.job", "article.vacancy",
         ".job-title a", ".vacancy-title a", ".position-title a",
+        "h2 a", "h3 a", "h4 a",
     ]
     candidates = []
     for sel in selectors:
@@ -143,32 +203,14 @@ def parse_generic(soup: BeautifulSoup, source: dict, keywords: list) -> list[dic
             continue
         seen_hrefs.add(href)
         if not href.startswith("http"):
-            base = "/".join(source["url"].split("/")[:3])
-            href = base + "/" + href.lstrip("/")
-        if contains_keyword(title, keywords):
+            href = base_domain + "/" + href.lstrip("/")
+        # Se keywords configuradas para a fonte, filtra por elas; senão aceita tudo
+        source_keywords = source.get("keywords", keywords)
+        if not source_keywords or contains_keyword(title, source_keywords):
             jobs.append({"title": title, "url": href, "source": source["name"]})
 
+    print(f"    -> {len(jobs)} vaga(s) encontrada(s)")
     return jobs
-
-
-def scrape_source(source: dict, keywords: list) -> list[dict]:
-    print(f"  Verificando: {source['name']}")
-    soup = fetch_page(source["url"])
-    if soup is None:
-        return []
-
-    name_lower = source["name"].lower()
-    if "undp" in name_lower:
-        jobs = parse_undp(soup, source)
-    elif "unicef" in name_lower or "un women" in name_lower:
-        jobs = parse_unicef(soup, source)
-    else:
-        jobs = parse_generic(soup, source, keywords)
-
-    # Filtra por keywords no título quando o parser não filtrou
-    filtered = [j for j in jobs if contains_keyword(j["title"], keywords)] or jobs[:20]
-    print(f"    -> {len(filtered)} vaga(s) encontrada(s)")
-    return filtered
 
 
 # ---------------------------------------------------------------------------
@@ -188,21 +230,21 @@ def build_html_email(new_jobs: list[dict], run_date: str) -> str:
 
     return f"""
     <html><body style="font-family:Arial,sans-serif;color:#333;max-width:750px;margin:auto;">
-      <h2 style="color:#004b91;">🌐 Novas Vagas ONU – Brasil</h2>
+      <h2 style="color:#004b91;">Novas Vagas ONU - Brasil</h2>
       <p>Relatório gerado em <strong>{run_date}</strong></p>
       <p>Foram encontradas <strong>{len(new_jobs)}</strong> nova(s) vaga(s) / consultoria(s):</p>
       <table width="100%" cellspacing="0" style="border-collapse:collapse;font-size:14px;">
         <thead>
           <tr style="background:#004b91;color:#fff;">
             <th style="padding:10px;text-align:left;">Título</th>
-            <th style="padding:10px;text-align:left;">Organismo</th>
+            <th style="padding:10px;text-align:left;">Organismo / Fonte</th>
           </tr>
         </thead>
         <tbody>{rows}</tbody>
       </table>
       <p style="margin-top:24px;font-size:12px;color:#999;">
         Monitoramento automático · GitHub Actions ·
-        Para adicionar fontes edite <code>config.json</code> no repositório.
+        Para adicionar fontes edite <code>custom_sources</code> em config.json.
       </p>
     </body></html>
     """
@@ -238,18 +280,28 @@ def send_email(subject: str, html_body: str, cfg: dict) -> None:
 # ---------------------------------------------------------------------------
 
 def main() -> None:
-    print(f"=== Monitor ONU Brasil — {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')} ===")
+    print(f"=== Monitor ONU Brasil — {now_utc().strftime('%Y-%m-%d %H:%M UTC')} ===")
 
     config = load_config()
     seen = load_seen()
     keywords = config.get("keywords", [])
-    sources = [s for s in config["sources"] if s.get("enabled", True)]
 
     all_jobs: list[dict] = []
-    for source in sources:
-        jobs = scrape_source(source, keywords)
-        all_jobs.extend(jobs)
-        time.sleep(2)  # pausa educada entre requisições
+
+    # --- Fontes fixas via API (mais confiáveis) ---
+    all_jobs.extend(fetch_reliefweb(keywords))
+    time.sleep(2)
+    all_jobs.extend(fetch_unjobs_org(keywords))
+    time.sleep(2)
+    all_jobs.extend(fetch_undp(keywords))
+    time.sleep(2)
+
+    # --- URLs manuais cadastradas em custom_sources ---
+    for source in config.get("custom_sources", []):
+        if not source.get("enabled", True):
+            continue
+        all_jobs.extend(fetch_custom_url(source, keywords))
+        time.sleep(2)
 
     # Identifica vagas novas
     new_jobs = []
@@ -273,7 +325,6 @@ def main() -> None:
     subject = f"{prefix} {len(new_jobs)} nova(s) vaga(s) encontrada(s) — {run_date}"
     html = build_html_email(new_jobs, run_date)
 
-    # Exibe no log (útil para depuração no Actions)
     print("\n--- Vagas novas ---")
     for j in new_jobs:
         print(f"  [{j['source']}] {j['title']}")

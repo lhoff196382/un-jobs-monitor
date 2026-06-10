@@ -52,23 +52,25 @@ Vá em **Settings → Secrets and variables → Actions → New repository secre
 
 No GitHub: **Actions → Monitor Vagas ONU Brasil → Run workflow**
 
-## Adicionar um site manualmente
+## Adicionar uma URL manualmente
 
-Edite `config.json` e adicione um novo objeto no array `"sources"`:
+Edite `config.json` e acrescente um novo objeto no array `"custom_sources"`:
 
 ```json
 {
-  "name": "Nome do Organismo",
+  "name": "Nome do site ou organismo",
   "url": "https://url-do-site-de-vagas.org",
-  "type": "html",
   "enabled": true,
-  "notes": "Descrição opcional"
+  "notes": "Descrição opcional",
+  "keywords": []
 }
 ```
 
-Para desativar temporariamente uma fonte sem removê-la, mude `"enabled": false`.
+- `"enabled": false` desativa temporariamente sem remover a entrada.
+- `"keywords": []` usa as keywords globais do arquivo. Para filtrar só nessa fonte, liste palavras específicas: `["saúde", "educação"]`.
+- Funciona com qualquer site que liste vagas em HTML estático.
 
-## Palavras-chave
+## Palavras-chave globais
 
 As vagas são filtradas pelas keywords em `config.json → keywords`. Adicione ou remova conforme necessário:
 
