@@ -305,61 +305,64 @@ def fetch_iadb(_keywords: list) -> list[dict]:
         except Exception:
             pass
 
-    # 2) Scraping HTML do site principal www.iadb.org
-    for url in [
-        "https://www.iadb.org/en/careers/all-jobs?City=Brazil",
-        "https://www.iadb.org/en/careers/consultant-opportunities",
-        "https://www.iadb.org/en/careers/all-jobs",
-    ]:
+    # 2) Scraping HTML — jobs.iadb.org (sistema PageUp)
+    pageup_urls = [
+        "https://jobs.iadb.org/go/All-Jobs/9638000/?q=brazil",
+        "https://jobs.iadb.org/go/All-Jobs/9638000/?q=Brasil",
+        "https://jobs.iadb.org/go/All-Jobs/9638000/",
+    ]
+    for url in pageup_urls:
         soup = fetch_html(url)
         if not soup:
             continue
         seen: set[str] = set()
-        for link in soup.find_all("a", href=True):
+        # Seletores típicos do PageUp ATS
+        for link in soup.select("a.job-title, a.position-title, h2 a, h3 a, "
+                                ".job-list-item a, td.job-title a, "
+                                "a[href*='/job/'], a[href*='/go/']"):
             title = link.get_text(strip=True)
             href  = link.get("href", "")
-            # Pega apenas links de vagas individuais
-            if not any(x in href for x in ["/careers/job/", "/job-detail/", "/careers/detail"]):
-                continue
             if not title or len(title) < 8 or href in seen:
+                continue
+            # Ignora links de navegação
+            if any(x in href.lower() for x in ["login", "register", "profile", "search", "#"]):
                 continue
             seen.add(href)
             # Tenta extrair localização do elemento pai
-            parent = link.find_parent(["li", "div", "article"])
+            parent = link.find_parent(["li", "tr", "div", "article"])
             location = ""
             if parent:
                 loc_tag = parent.find(class_=lambda c: c and any(
-                    x in c.lower() for x in ["location", "city", "country"]))
+                    x in (c.lower() if c else "") for x in ["location", "city", "country", "local"]))
                 if loc_tag:
                     location = loc_tag.get_text(strip=True)
+                else:
+                    # Tenta achar texto com vírgula que parece cidade/país
+                    text = parent.get_text(" ", strip=True)
+                    for part in text.split("|"):
+                        part = part.strip()
+                        if "," in part and len(part) < 50:
+                            location = part
+                            break
             if not href.startswith("http"):
-                href = "https://www.iadb.org" + href
-            # Só inclui se localização é Brasil ou não foi possível determinar
+                href = "https://jobs.iadb.org" + href
+            # Inclui se Brasil confirmado ou localização não determinada
             if not location or _is_brazil(location):
                 jobs.append({"title": title, "url": href, "source": "BID/IADB",
                              "location": location or "Brazil"})
         if jobs:
-            print(f"    -> {len(jobs)} vaga(s) encontrada(s) [HTML]")
+            print(f"    -> {len(jobs)} vaga(s) encontrada(s) [PageUp HTML]")
             return jobs
 
     # Site bloqueia scraper — link direto para consulta manual
     print("    -> BID bloqueia scraper. Incluindo link direto no e-mail.")
-    return [
-        {
-            "title": "BID/IADB — Vagas de Consultor (clique e filtre por City: Brazil)",
-            "url": "https://www.iadb.org/en/careers/consultant-opportunities",
-            "source": "BID/IADB",
-            "location": "Brazil",
-            "_manual": True,
-        },
-        {
-            "title": "BID/IADB — Todas as vagas (clique e filtre por City: Brazil)",
-            "url": "https://www.iadb.org/en/careers/all-jobs",
-            "source": "BID/IADB",
-            "location": "Brazil",
-            "_manual": True,
-        },
-    ]
+    return [{
+        "title": "BID/IADB — Ver todas as vagas (filtre por Brazil na busca)",
+        "url": "https://jobs.iadb.org/go/All-Jobs/9638000/",
+        "source": "BID/IADB",
+        "location": "Brazil",
+        "_manual": True,
+    }]
 
 
 UNTALENT_BRAZIL_TERMS = BRAZIL_TERMS  # reutiliza lista centralizada
