@@ -1,0 +1,50 @@
+name: Adicionar Fonte de Vagas
+
+on:
+  workflow_dispatch:
+    inputs:
+      name:
+        description: "Nome do site ou organismo"
+        required: true
+      url:
+        description: "URL da página de vagas"
+        required: true
+      keywords:
+        description: "Palavras-chave específicas (separadas por vírgula). Deixe em branco para usar as globais."
+        required: false
+        default: ""
+      notes:
+        description: "Observações (opcional)"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+jobs:
+  add:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repositório
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Adicionar fonte ao config.json
+        env:
+          SOURCE_NAME:     ${{ github.event.inputs.name }}
+          SOURCE_URL:      ${{ github.event.inputs.url }}
+          SOURCE_KEYWORDS: ${{ github.event.inputs.keywords }}
+          SOURCE_NOTES:    ${{ github.event.inputs.notes }}
+        run: python add_source.py
+
+      - name: Commitar config.json atualizado
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add config.json
+          git commit -m "feat: adiciona fonte '${{ github.event.inputs.name }}' via formulário"
+          git push
