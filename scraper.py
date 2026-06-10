@@ -258,89 +258,85 @@ def fetch_onu_brasil(_keywords: list) -> list[dict]:
 
 
 def fetch_iadb(_keywords: list) -> list[dict]:
-    """BID/IADB — todas as vagas no Brasil via API interna e fallbacks."""
+    """BID/IADB — vagas no Brasil via API Workday e fallbacks."""
     print("  Verificando: BID/IADB (todas as vagas no Brasil)")
 
     jobs: list[dict] = []
 
-    # 1) API interna do iCIMS (sistema ATS do BID)
-    api_attempts = [
-        ("GET",  "https://jobs.iadb.org/api/jobs/search?country=BRA&limit=100", {}),
-        ("GET",  "https://jobs.iadb.org/api/search?CountryCodes=BRA&pageSize=100", {}),
-        ("POST", "https://jobs.iadb.org/api/jobs/search", {"country": "BRA", "pageSize": 100}),
+    # 1) API Workday — padrão usado pelo BID/IADB
+    workday_bases = [
+        "https://idb.wd1.myworkdayjobs.com",
+        "https://idbinvest.wd1.myworkdayjobs.com",
     ]
-    for method, url, body in api_attempts:
+    for base in workday_bases:
         try:
-            if method == "POST":
-                resp = requests.post(url, json=body, headers={**HEADERS, "Content-Type": "application/json"}, timeout=REQUEST_TIMEOUT)
-            else:
-                resp = requests.get(url, headers=HEADERS, timeout=REQUEST_TIMEOUT)
-            if resp.status_code == 200 and "application/json" in resp.headers.get("content-type", ""):
+            api_url = f"{base}/wday/cxs/idb/IDB_External_Careers/jobs"
+            payload = {
+                "appliedFacets": {"locations": ["Brazil"]},
+                "limit": 50, "offset": 0, "searchText": ""
+            }
+            resp = requests.post(api_url, json=payload,
+                                 headers={**HEADERS, "Content-Type": "application/json"},
+                                 timeout=REQUEST_TIMEOUT)
+            if resp.status_code == 200:
                 data = resp.json()
-                items = (data if isinstance(data, list)
-                         else data.get("jobs", data.get("requisitions", data.get("data", []))))
-                for item in items:
-                    title    = item.get("title", item.get("jobTitle", ""))
-                    href     = item.get("url", item.get("applyUrl", item.get("detailUrl", "")))
-                    location = item.get("location", item.get("primaryLocation", "Brazil"))
-                    if title and href:
-                        if not href.startswith("http"):
-                            href = "https://jobs.iadb.org" + href
-                        jobs.append({"title": title, "url": href, "source": "BID/IADB", "location": location})
+                for item in data.get("jobPostings", []):
+                    title    = item.get("title", "")
+                    path     = item.get("externalPath", "")
+                    location = item.get("locationsText", "Brazil")
+                    if title and path:
+                        href = base + path
+                        if _is_brazil(location):
+                            jobs.append({"title": title, "url": href,
+                                         "source": "BID/IADB", "location": location})
                 if jobs:
-                    print(f"    -> {len(jobs)} vaga(s) encontrada(s) [API]")
+                    print(f"    -> {len(jobs)} vaga(s) encontrada(s) [Workday API]")
                     return jobs
         except Exception:
             pass
 
-    # 2) RSS
-    for rss in ["https://jobs.iadb.org/en/rss?CountryCodes=BRA",
-                "https://jobs.iadb.org/rss?CountryCodes=BRA"]:
-        try:
-            resp = requests.get(rss, headers=HEADERS, timeout=REQUEST_TIMEOUT)
-            if resp.status_code == 200 and "<item>" in resp.text:
-                soup = BeautifulSoup(resp.text, "xml")
-                for item in soup.find_all("item"):
-                    title = (item.find("title") or {}).get_text(strip=True) if item.find("title") else ""
-                    href  = (item.find("link")  or {}).get_text(strip=True) if item.find("link")  else ""
-                    if title and href:
-                        jobs.append({"title": title, "url": href, "source": "BID/IADB", "location": "Brazil"})
-                if jobs:
-                    print(f"    -> {len(jobs)} vaga(s) encontrada(s) [RSS]")
-                    return jobs
-        except Exception:
-            pass
-
-    # 3) Scraping HTML das páginas de resultados
+    # 2) Scraping HTML do site principal www.iadb.org
     for url in [
-        "https://jobs.iadb.org/en/search-results?CountryCodes=BRA",
-        "https://jobs.iadb.org/en/search-results?keywords=&CountryCodes=BRA",
-        "https://www.iadb.org/en/careers/job-opportunities?field_country_target_id=86",
+        "https://www.iadb.org/en/careers/all-jobs?City=Brazil",
+        "https://www.iadb.org/en/careers/consultant-opportunities",
+        "https://www.iadb.org/en/careers/all-jobs",
     ]:
         soup = fetch_html(url)
         if not soup:
             continue
         seen: set[str] = set()
-        for sel in ["a.jobTitle-link", "h2.jobTitle a", ".jobTitle a",
-                    "a[href*='/en/job/']", "a[href*='/job/']", ".job-title a"]:
-            for link in soup.select(sel):
-                title = link.get_text(strip=True)
-                href  = link.get("href", "")
-                if not title or len(title) < 8 or href in seen:
-                    continue
-                seen.add(href)
-                if not href.startswith("http"):
-                    href = "https://jobs.iadb.org" + href
-                jobs.append({"title": title, "url": href, "source": "BID/IADB", "location": "Brazil"})
+        for link in soup.find_all("a", href=True):
+            title = link.get_text(strip=True)
+            href  = link.get("href", "")
+            # Pega apenas links de vagas individuais
+            if not any(x in href for x in ["/careers/job/", "/job-detail/", "/careers/detail"]):
+                continue
+            if not title or len(title) < 8 or href in seen:
+                continue
+            seen.add(href)
+            # Tenta extrair localização do elemento pai
+            parent = link.find_parent(["li", "div", "article"])
+            location = ""
+            if parent:
+                loc_tag = parent.find(class_=lambda c: c and any(
+                    x in c.lower() for x in ["location", "city", "country"]))
+                if loc_tag:
+                    location = loc_tag.get_text(strip=True)
+            if not href.startswith("http"):
+                href = "https://www.iadb.org" + href
+            # Só inclui se localização é Brasil ou não foi possível determinar
+            if not location or _is_brazil(location):
+                jobs.append({"title": title, "url": href, "source": "BID/IADB",
+                             "location": location or "Brazil"})
         if jobs:
             print(f"    -> {len(jobs)} vaga(s) encontrada(s) [HTML]")
             return jobs
 
-    # Site usa JavaScript — retorna link fixo para consulta manual no e-mail
-    print("    -> Site BID usa JavaScript. Incluindo link direto no e-mail.")
+    # Site usa JavaScript — link direto para consulta manual
+    print("    -> BID usa JavaScript. Incluindo link direto no e-mail.")
     return [{
-        "title": "BID/IADB — Clique aqui para ver todas as vagas no Brasil",
-        "url": "https://jobs.iadb.org/en/search-results#CountryCodes=BRA",
+        "title": "BID/IADB — Ver todas as vagas (filtrar por Brazil/Brasil)",
+        "url": "https://www.iadb.org/en/careers/all-jobs",
         "source": "BID/IADB",
         "location": "Brazil",
         "_manual": True,
