@@ -32,6 +32,13 @@
       "enabled": true,
       "notes": "",
       "keywords": []
+    },
+    {
+      "name": "BID",
+      "url": "https://www.iadb.org/pt-br",
+      "enabled": true,
+      "notes": "",
+      "keywords": []
     }
   ],
   "email": {
