@@ -1,20 +1,32 @@
 {
   "keywords": [
-    "Brazil", "Brasil", "Brasília", "Rio de Janeiro", "São Paulo",
-    "consultant", "consultoria", "consultancy", "contrato", "contract",
-    "national", "nacional", "NPO", "NOA", "NOB", "NOC", "NOD"
+    "Brazil",
+    "Brasil",
+    "Brasília",
+    "Rio de Janeiro",
+    "São Paulo",
+    "consultant",
+    "consultoria",
+    "consultancy",
+    "contrato",
+    "contract",
+    "national",
+    "nacional",
+    "NPO",
+    "NOA",
+    "NOB",
+    "NOC",
+    "NOD"
   ],
-
   "custom_sources": [
     {
-      "name": "Exemplo — Remova ou substitua este item",
-      "url": "https://exemplo.org/vagas",
-      "enabled": false,
-      "notes": "Cole aqui a URL de qualquer site de vagas que queira monitorar",
+      "name": "UNJOBS",
+      "url": "https://unjobs.org/",
+      "enabled": true,
+      "notes": "",
       "keywords": []
     }
   ],
-
   "email": {
     "to": "",
     "subject_prefix": "[ONU Vagas Brasil]"
