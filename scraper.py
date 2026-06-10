@@ -218,20 +218,8 @@ def fetch_custom_url(source: dict, keywords: list) -> list[dict]:
 # ---------------------------------------------------------------------------
 
 def build_html_email(new_jobs: list[dict], run_date: str) -> str:
-    rows = ""
-    for j in new_jobs:
-        rows += f"""
-        <tr>
-          <td style="padding:8px;border-bottom:1px solid #eee;">
-            <a href="{j['url']}" style="color:#1a73e8;font-weight:bold;">{j['title']}</a>
-          </td>
-          <td style="padding:8px;border-bottom:1px solid #eee;color:#555;">{j['source']}</td>
-        </tr>"""
-
-    return f"""
-    <html><body style="font-family:Arial,sans-serif;color:#333;max-width:750px;margin:auto;">
-      <h2 style="color:#004b91;">Novas Vagas ONU - Brasil</h2>
-      <p>Relatório gerado em <strong>{run_date}</strong></p>
+    if new_jobs:
+        body_content = f"""
       <p>Foram encontradas <strong>{len(new_jobs)}</strong> nova(s) vaga(s) / consultoria(s):</p>
       <table width="100%" cellspacing="0" style="border-collapse:collapse;font-size:14px;">
         <thead>
@@ -240,11 +228,28 @@ def build_html_email(new_jobs: list[dict], run_date: str) -> str:
             <th style="padding:10px;text-align:left;">Organismo / Fonte</th>
           </tr>
         </thead>
-        <tbody>{rows}</tbody>
-      </table>
+        <tbody>{"".join(f'''
+        <tr>
+          <td style="padding:8px;border-bottom:1px solid #eee;">
+            <a href="{j["url"]}" style="color:#1a73e8;font-weight:bold;">{j["title"]}</a>
+          </td>
+          <td style="padding:8px;border-bottom:1px solid #eee;color:#555;">{j["source"]}</td>
+        </tr>''' for j in new_jobs)}</tbody>
+      </table>"""
+    else:
+        body_content = """
+      <p style="padding:16px;background:#f0f4f8;border-left:4px solid #004b91;border-radius:4px;">
+        Nenhuma vaga nova encontrada nesta varredura. Os sites monitorados foram verificados
+        e não há publicações novas desde o último relatório.
+      </p>"""
+
+    return f"""
+    <html><body style="font-family:Arial,sans-serif;color:#333;max-width:750px;margin:auto;">
+      <h2 style="color:#004b91;">Monitoramento ONU - Brasil</h2>
+      <p>Relatório gerado em <strong>{run_date}</strong></p>
+      {body_content}
       <p style="margin-top:24px;font-size:12px;color:#999;">
-        Monitoramento automático · GitHub Actions ·
-        Para adicionar fontes edite <code>custom_sources</code> em config.json.
+        Monitoramento automático · GitHub Actions · a cada 2 dias às 09:00 BRT
       </p>
     </body></html>
     """
@@ -316,19 +321,20 @@ def main() -> None:
     save_seen(updated_seen)
     print(f"\nTotal de vagas novas: {len(new_jobs)}")
 
-    if not new_jobs:
-        print("Nenhuma vaga nova encontrada. E-mail não enviado.")
-        return
-
     run_date = datetime.now().strftime("%d/%m/%Y às %H:%M")
     prefix = config["email"]["subject_prefix"]
-    subject = f"{prefix} {len(new_jobs)} nova(s) vaga(s) encontrada(s) — {run_date}"
-    html = build_html_email(new_jobs, run_date)
 
-    print("\n--- Vagas novas ---")
-    for j in new_jobs:
-        print(f"  [{j['source']}] {j['title']}")
-        print(f"    {j['url']}")
+    if new_jobs:
+        subject = f"{prefix} {len(new_jobs)} nova(s) vaga(s) encontrada(s) — {run_date}"
+        print("\n--- Vagas novas ---")
+        for j in new_jobs:
+            print(f"  [{j['source']}] {j['title']}")
+            print(f"    {j['url']}")
+    else:
+        subject = f"{prefix} Sem novas vagas — {run_date}"
+        print("Nenhuma vaga nova. Enviando e-mail de status.")
+
+    html = build_html_email(new_jobs, run_date)
 
     try:
         send_email(subject, html, config)
