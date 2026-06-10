@@ -43,3 +43,4 @@ jobs:
           git add seen_jobs.json || true
           git diff --cached --quiet || git commit -m "chore: atualiza seen_jobs [skip ci]"
           git push
+          
