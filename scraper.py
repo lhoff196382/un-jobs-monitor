@@ -73,19 +73,25 @@ def fetch_html(url: str) -> BeautifulSoup | None:
         return None
 
 
+def _is_brazil(location: str) -> bool:
+    loc = location.lower()
+    return any(x in loc for x in ["brazil", "brasil", "brasilia", "brasília",
+                                   "são paulo", "rio de janeiro", "recife",
+                                   "salvador", "fortaleza", "manaus", "belo horizonte"])
+
+
 # ---------------------------------------------------------------------------
-# Fontes via API (mais confiáveis)
+# Fontes fixas — URL já filtra por Brasil, sem filtro de keyword
 # ---------------------------------------------------------------------------
 
-def fetch_reliefweb(keywords: list) -> list[dict]:
-    """ReliefWeb API — vagas humanitárias ONU com filtro Brasil."""
+def fetch_reliefweb(_keywords: list) -> list[dict]:
     print("  Verificando: ReliefWeb API (Brasil)")
     url = "https://api.reliefweb.int/v1/jobs"
     params = {
         "appname": "un-jobs-monitor",
         "filter[field]": "country.name",
         "filter[value]": "Brazil",
-        "fields[include][]": ["title", "url", "source.name", "date.created"],
+        "fields[include][]": ["title", "url", "source.name", "city.name", "country.name"],
         "limit": 50,
         "sort[]": "date.created:desc",
     }
@@ -99,12 +105,12 @@ def fetch_reliefweb(keywords: list) -> list[dict]:
             title = fields.get("title", "")
             job_url = fields.get("url", "")
             source_name = fields.get("source", [{}])[0].get("name", "ReliefWeb")
+            city = fields.get("city", [{}])[0].get("name", "") if fields.get("city") else ""
+            country = fields.get("country", [{}])[0].get("name", "Brazil") if fields.get("country") else "Brazil"
+            location = city if city else country
             if title:
-                jobs.append({
-                    "title": title,
-                    "url": job_url,
-                    "source": f"ReliefWeb / {source_name}",
-                })
+                jobs.append({"title": title, "url": job_url,
+                             "source": f"ReliefWeb / {source_name}", "location": location})
         print(f"    -> {len(jobs)} vaga(s) encontrada(s)")
         return jobs
     except Exception as e:
@@ -112,8 +118,7 @@ def fetch_reliefweb(keywords: list) -> list[dict]:
         return []
 
 
-def fetch_unjobs_org(keywords: list) -> list[dict]:
-    """UNJobs.org — agregador HTML de todas as vagas ONU."""
+def fetch_unjobs_org(_keywords: list) -> list[dict]:
     print("  Verificando: UNJobs.org (agregador ONU)")
     soup = fetch_html("https://unjobs.org/duty_stations/brazil")
     if not soup:
@@ -129,18 +134,26 @@ def fetch_unjobs_org(keywords: list) -> list[dict]:
             continue
         if not href.startswith("http"):
             href = "https://unjobs.org" + href
-        jobs.append({"title": title, "url": href, "source": "UNJobs.org"})
+        location = "Brazil"
+        parent = link.parent
+        if parent:
+            loc_tag = parent.find(class_=lambda c: c and any(
+                x in c for x in ["location", "duty", "city", "place"]))
+            if loc_tag:
+                location = loc_tag.get_text(strip=True)
+            elif "," in title:
+                parts = title.rsplit(",", 1)
+                if len(parts) == 2 and len(parts[1].strip()) < 40:
+                    location = parts[1].strip()
+        jobs.append({"title": title, "url": href, "source": "UNJobs.org", "location": location})
     print(f"    -> {len(jobs)} vaga(s) encontrada(s)")
     return jobs
 
 
-def fetch_undp(keywords: list) -> list[dict]:
-    """UNDP Jobs — vagas do Programa das Nações Unidas para o Desenvolvimento."""
+def fetch_undp(_keywords: list) -> list[dict]:
     print("  Verificando: UNDP Jobs (Brasil)")
-    # Usando a URL de busca com país Brazil
     soup = fetch_html(
-        "https://jobs.undp.org/cj_view_jobs.cfm?curPage=1&f_job_type=0"
-        "&f_date_submitted=0&f_country=105"
+        "https://jobs.undp.org/cj_view_jobs.cfm?curPage=1&f_job_type=0&f_date_submitted=0&f_country=105"
     )
     if not soup:
         return []
@@ -154,17 +167,18 @@ def fetch_undp(keywords: list) -> list[dict]:
         if not href.startswith("http"):
             href = "https://jobs.undp.org/" + href.lstrip("/")
         if title and len(title) > 6:
-            jobs.append({"title": title, "url": href, "source": "UNDP"})
+            cells = row.find_all("td")
+            location = cells[1].get_text(strip=True) if len(cells) > 1 else "Brazil"
+            jobs.append({"title": title, "url": href, "source": "UNDP", "location": location})
     print(f"    -> {len(jobs)} vaga(s) encontrada(s)")
     return jobs
 
 
 # ---------------------------------------------------------------------------
-# Parser genérico para URLs manuais e demais fontes HTML
+# Parser genérico para URLs manuais
 # ---------------------------------------------------------------------------
 
 def fetch_custom_url(source: dict, keywords: list) -> list[dict]:
-    """Scraper genérico para URLs adicionadas manualmente no config.json."""
     print(f"  Verificando: {source['name']} (URL customizada)")
     soup = fetch_html(source["url"])
     if not soup:
@@ -174,20 +188,16 @@ def fetch_custom_url(source: dict, keywords: list) -> list[dict]:
     seen_hrefs: set[str] = set()
     base_domain = "/".join(source["url"].split("/")[:3])
 
-    # Tenta seletores comuns de listagem de vagas
     selectors = [
         "li.job", "li.vacancy", "li.position", "li.listing",
         "div.job", "div.vacancy", "div.position",
-        "tr.job", "tr.vacancy",
-        "article.job", "article.vacancy",
+        "tr.job", "tr.vacancy", "article.job", "article.vacancy",
         ".job-title a", ".vacancy-title a", ".position-title a",
         "h2 a", "h3 a", "h4 a",
     ]
     candidates = []
     for sel in selectors:
         candidates.extend(soup.select(sel))
-
-    # Fallback: todos os links da página
     if not candidates:
         candidates = soup.find_all("a", href=True)
 
@@ -204,10 +214,16 @@ def fetch_custom_url(source: dict, keywords: list) -> list[dict]:
         seen_hrefs.add(href)
         if not href.startswith("http"):
             href = base_domain + "/" + href.lstrip("/")
-        # Se keywords configuradas para a fonte, filtra por elas; senão aceita tudo
         source_keywords = source.get("keywords", keywords)
         if not source_keywords or contains_keyword(title, source_keywords):
-            jobs.append({"title": title, "url": href, "source": source["name"]})
+            location = ""
+            parent = link.parent
+            if parent:
+                loc_tag = parent.find(class_=lambda c: c and any(
+                    x in c for x in ["location", "duty", "city", "place", "local"]))
+                if loc_tag:
+                    location = loc_tag.get_text(strip=True)
+            jobs.append({"title": title, "url": href, "source": source["name"], "location": location})
 
     print(f"    -> {len(jobs)} vaga(s) encontrada(s)")
     return jobs
@@ -219,22 +235,32 @@ def fetch_custom_url(source: dict, keywords: list) -> list[dict]:
 
 def build_html_email(new_jobs: list[dict], run_date: str) -> str:
     if new_jobs:
+        sorted_jobs = sorted(
+            new_jobs,
+            key=lambda j: (0 if _is_brazil(j.get("location", "")) else 1, j.get("location", ""))
+        )
+        rows = ""
+        for j in sorted_jobs:
+            location = j.get("location", "") or "—"
+            rows += f"""
+        <tr>
+          <td style="padding:8px;border-bottom:1px solid #eee;">
+            <a href="{j['url']}" style="color:#1a73e8;font-weight:bold;">{j['title']}</a>
+          </td>
+          <td style="padding:8px;border-bottom:1px solid #eee;color:#555;">{j['source']}</td>
+          <td style="padding:8px;border-bottom:1px solid #eee;color:#444;">{location}</td>
+        </tr>"""
         body_content = f"""
-      <p>Foram encontradas <strong>{len(new_jobs)}</strong> nova(s) vaga(s) / consultoria(s):</p>
+      <p>Foram encontradas <strong>{len(new_jobs)}</strong> nova(s) vaga(s) — vagas no Brasil aparecem primeiro:</p>
       <table width="100%" cellspacing="0" style="border-collapse:collapse;font-size:14px;">
         <thead>
           <tr style="background:#004b91;color:#fff;">
             <th style="padding:10px;text-align:left;">Título</th>
             <th style="padding:10px;text-align:left;">Organismo / Fonte</th>
+            <th style="padding:10px;text-align:left;">Local</th>
           </tr>
         </thead>
-        <tbody>{"".join(f'''
-        <tr>
-          <td style="padding:8px;border-bottom:1px solid #eee;">
-            <a href="{j["url"]}" style="color:#1a73e8;font-weight:bold;">{j["title"]}</a>
-          </td>
-          <td style="padding:8px;border-bottom:1px solid #eee;color:#555;">{j["source"]}</td>
-        </tr>''' for j in new_jobs)}</tbody>
+        <tbody>{rows}</tbody>
       </table>"""
     else:
         body_content = """
@@ -244,7 +270,7 @@ def build_html_email(new_jobs: list[dict], run_date: str) -> str:
       </p>"""
 
     return f"""
-    <html><body style="font-family:Arial,sans-serif;color:#333;max-width:750px;margin:auto;">
+    <html><body style="font-family:Arial,sans-serif;color:#333;max-width:800px;margin:auto;">
       <h2 style="color:#004b91;">Monitoramento ONU - Brasil</h2>
       <p>Relatório gerado em <strong>{run_date}</strong></p>
       {body_content}
@@ -306,7 +332,6 @@ def main() -> None:
 
     all_jobs: list[dict] = []
 
-    # --- Fontes fixas via API (mais confiáveis) ---
     all_jobs.extend(fetch_reliefweb(keywords))
     time.sleep(2)
     all_jobs.extend(fetch_unjobs_org(keywords))
@@ -314,14 +339,12 @@ def main() -> None:
     all_jobs.extend(fetch_undp(keywords))
     time.sleep(2)
 
-    # --- URLs manuais cadastradas em custom_sources ---
     for source in config.get("custom_sources", []):
         if not source.get("enabled", True):
             continue
         all_jobs.extend(fetch_custom_url(source, keywords))
         time.sleep(2)
 
-    # Identifica vagas novas
     new_jobs = []
     updated_seen = set(seen)
     for job in all_jobs:
@@ -341,8 +364,7 @@ def main() -> None:
         subject = f"{prefix} {len(new_jobs)} nova(s) vaga(s) encontrada(s) — {run_date}"
         print("\n--- Vagas novas ---")
         for j in new_jobs:
-            print(f"  [{j['source']}] {j['title']}")
-            print(f"    {j['url']}")
+            print(f"  [{j['source']}] {j['title']} | {j.get('location', '')}")
     else:
         subject = f"{prefix} Sem novas vagas — {run_date}"
         print("Nenhuma vaga nova. Enviando e-mail de status.")
