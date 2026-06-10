@@ -23,8 +23,8 @@
       "name": "UNITALENT",
       "url": "https://untalent.org/jobs?location=Brazil",
       "enabled": true,
-      "notes": "Agregador ONU — parser específico embutido",
-      "keywords": []
+      "notes": "Somente vagas no Brasil com Consultant ou Senior no título",
+      "keywords": ["Consultant", "Senior"]
     },
     {
       "name": "ONU",

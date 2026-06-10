@@ -277,9 +277,21 @@ def fetch_iadb(_keywords: list) -> list[dict]:
     return jobs
 
 
-def fetch_untalent(_keywords: list) -> list[dict]:
-    """UNTalent.org — agregador de vagas ONU."""
-    print("  Verificando: UNTalent.org")
+UNTALENT_BRAZIL_TERMS = ["brazil", "brasil", "brasilia", "brasília",
+                         "são paulo", "rio de janeiro", "recife", "belo horizonte"]
+
+
+def fetch_untalent(keywords: list) -> list[dict]:
+    """UNTalent.org — somente vagas no Brasil, filtradas por keywords da fonte."""
+    print("  Verificando: UNTalent.org (Brasil / Consultant / Senior)")
+
+    def passes_filter(title: str, location: str) -> bool:
+        # Local deve ser Brasil
+        loc_ok = not location or any(t in location.lower() for t in UNTALENT_BRAZIL_TERMS)
+        # Título deve conter ao menos uma keyword (se definidas)
+        title_ok = not keywords or contains_keyword(title, keywords)
+        return loc_ok and title_ok
+
     # Tenta API JSON primeiro
     try:
         resp = requests.get(
@@ -294,7 +306,7 @@ def fetch_untalent(_keywords: list) -> list[dict]:
                 title = item.get("title", item.get("name", ""))
                 url = item.get("url", item.get("link", "https://untalent.org/jobs"))
                 location = item.get("location", item.get("duty_station", "Brazil"))
-                if title:
+                if title and passes_filter(title, location):
                     jobs.append({"title": title, "url": url, "source": "UNTalent.org", "location": location})
             if jobs:
                 print(f"    -> {len(jobs)} vaga(s) encontrada(s)")
@@ -315,7 +327,8 @@ def fetch_untalent(_keywords: list) -> list[dict]:
             continue
         if not href.startswith("http"):
             href = "https://untalent.org" + href
-        jobs.append({"title": title, "url": href, "source": "UNTalent.org", "location": "Brazil"})
+        if passes_filter(title, "Brazil"):
+            jobs.append({"title": title, "url": href, "source": "UNTalent.org", "location": "Brazil"})
     print(f"    -> {len(jobs)} vaga(s) encontrada(s)")
     return jobs
 
@@ -333,13 +346,15 @@ SPECIFIC_PARSERS = {
 # Parser genérico para URLs manuais
 # ---------------------------------------------------------------------------
 
-def fetch_custom_url(source: dict, keywords: list) -> list[dict]:
+def fetch_custom_url(source: dict, global_keywords: list) -> list[dict]:
     name_key = source["name"].lower().strip()
+    # Keywords da fonte têm prioridade; se vazia, usa as globais
+    source_keywords = source.get("keywords") or global_keywords
 
-    # Usa parser específico se disponível
+    # Usa parser específico se disponível, passando keywords da fonte
     for key, parser in SPECIFIC_PARSERS.items():
         if key in name_key:
-            return parser(keywords)
+            return parser(source_keywords)
 
     print(f"  Verificando: {source['name']} (URL customizada)")
     soup = fetch_html(source["url"])
