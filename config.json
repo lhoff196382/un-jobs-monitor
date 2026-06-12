@@ -32,6 +32,30 @@
       "enabled": true,
       "notes": "",
       "keywords": []
+    },
+    {
+      "name": "OIM BRASIL",
+      "url": "https://brazil.iom.int/pt-br/vagas",
+      "enabled": true,
+      "manual": true,
+      "notes": "Site bloqueia scraping (403) — link manual no e-mail",
+      "keywords": []
+    },
+    {
+      "name": "OIT",
+      "url": "https://jobs.ilo.org/search/?q=&locationsearch=Brazil",
+      "enabled": true,
+      "manual": true,
+      "notes": "Vagas renderizadas por JavaScript — link manual filtrado por Brazil",
+      "keywords": []
+    },
+    {
+      "name": "BANCO MUNDIAL",
+      "url": "https://worldbankgroup.csod.com/ats/careersite/search.aspx?site=1&c=worldbankgroup",
+      "enabled": true,
+      "manual": true,
+      "notes": "Portal Cornerstone usa JavaScript — link manual no e-mail",
+      "keywords": []
     }
   ],
   "email": {

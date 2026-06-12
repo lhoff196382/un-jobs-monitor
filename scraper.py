@@ -456,6 +456,19 @@ SPECIFIC_PARSERS = {
 
 def fetch_custom_url(source: dict, global_keywords: list) -> list[dict]:
     name_key = source["name"].lower().strip()
+
+    # Fonte marcada como manual: site bloqueia scraping ou usa JavaScript,
+    # então o e-mail traz sempre um link direto para a página de vagas
+    if source.get("manual"):
+        print(f"  {source['name']}: fonte manual — incluindo link direto no e-mail")
+        return [{
+            "title": f"{source['name']} — Ver vagas no site (link direto)",
+            "url": source["url"],
+            "source": source["name"],
+            "location": "Brasil (verificar no site)",
+            "_manual": True,
+        }]
+
     # Keywords da fonte têm prioridade; se vazia, usa as globais
     source_keywords = source.get("keywords") or global_keywords
 
