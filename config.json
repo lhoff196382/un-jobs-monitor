@@ -56,6 +56,22 @@
       "manual": true,
       "notes": "Portal Cornerstone usa JavaScript — link manual no e-mail",
       "keywords": []
+    },
+    {
+      "name": "IMPACTPOOL",
+      "url": "https://www.impactpool.org/jobs?location=Brazil",
+      "enabled": true,
+      "manual": true,
+      "notes": "Agregador ONU/ONGs — vagas filtradas por Brazil, JavaScript — link manual no e-mail",
+      "keywords": []
+    },
+    {
+      "name": "DEVEX",
+      "url": "https://www.devex.com/jobs/search?country_id=br",
+      "enabled": true,
+      "manual": true,
+      "notes": "Plataforma de vagas internacionais — bloqueia scraping (403) — link manual no e-mail",
+      "keywords": []
     }
   ],
   "email": {

@@ -18,6 +18,8 @@ FONTES A CONSULTAR (busque em cada uma):
 8. OIM Brasil — https://brazil.iom.int/pt-br/vagas
 9. OIT — https://jobs.ilo.org/search/?q=&locationsearch=Brazil
 10. Banco Mundial — https://worldbankgroup.csod.com (vagas no Brasil)
+11. Impactpool — https://www.impactpool.org/jobs?location=Brazil
+12. Devex — https://www.devex.com/jobs/search?country_id=br
 
 CRITÉRIOS:
 - Somente vagas com local de trabalho no Brasil (aceitar as grafias "Brasil" e "Brazil",
