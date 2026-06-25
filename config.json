@@ -72,6 +72,30 @@
       "manual": true,
       "notes": "Plataforma de vagas internacionais — bloqueia scraping (403) — link manual no e-mail",
       "keywords": []
+    },
+    {
+      "name": "WFP",
+      "url": "https://career5.successfactors.eu/career?company=C0000168410P&career_ns=job_listing_summary",
+      "enabled": true,
+      "manual": true,
+      "notes": "World Food Programme — SAP SuccessFactors, JavaScript — filtrar Brazil manualmente",
+      "keywords": []
+    },
+    {
+      "name": "CDB",
+      "url": "https://career5.successfactors.eu/career?company=caribbeandP2&career_ns=job_listing_summary",
+      "enabled": true,
+      "manual": true,
+      "notes": "Caribbean Development Bank — SAP SuccessFactors, JavaScript — filtrar Brazil manualmente",
+      "keywords": []
+    },
+    {
+      "name": "DT GLOBAL",
+      "url": "https://www.dt-global.com/careers",
+      "enabled": true,
+      "manual": true,
+      "notes": "DT Global — JavaScript — filtrar Brazil manualmente",
+      "keywords": []
     }
   ],
   "email": {

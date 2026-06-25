@@ -20,6 +20,9 @@ FONTES A CONSULTAR (busque em cada uma):
 10. Banco Mundial — https://worldbankgroup.csod.com (vagas no Brasil)
 11. Impactpool — https://www.impactpool.org/jobs?location=Brazil
 12. Devex — https://www.devex.com/jobs/search?country_id=br
+13. WFP — https://career5.successfactors.eu/career?company=C0000168410P&career_ns=job_listing_summary (filtrar Brazil)
+14. CDB — https://career5.successfactors.eu/career?company=caribbeandP2&career_ns=job_listing_summary (filtrar Brazil)
+15. DT Global — https://www.dt-global.com/careers (filtrar Brazil)
 
 CRITÉRIOS:
 - Somente vagas com local de trabalho no Brasil (aceitar as grafias "Brasil" e "Brazil",
