@@ -77,8 +77,7 @@
       "name": "WFP",
       "url": "https://career5.successfactors.eu/career?company=C0000168410P&career_ns=job_listing_summary",
       "enabled": true,
-      "manual": true,
-      "notes": "World Food Programme — SAP SuccessFactors, JavaScript — filtrar Brazil manualmente",
+      "notes": "World Food Programme — SAP SuccessFactors via Playwright (headless Chrome)",
       "keywords": []
     },
     {

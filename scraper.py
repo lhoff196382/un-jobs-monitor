@@ -18,6 +18,13 @@ from pathlib import Path
 import requests
 from bs4 import BeautifulSoup
 
+# Playwright é opcional — instalado apenas quando necessário (sites JS)
+try:
+    from playwright.sync_api import sync_playwright
+    PLAYWRIGHT_AVAILABLE = True
+except ImportError:
+    PLAYWRIGHT_AVAILABLE = False
+
 CONFIG_FILE = "config.json"
 SEEN_FILE = "seen_jobs.json"
 HEADERS = {
@@ -441,6 +448,93 @@ def fetch_untalent(keywords: list) -> list[dict]:
     return jobs
 
 
+def fetch_wfp(_keywords: list) -> list[dict]:
+    """WFP — vagas no Brasil via Playwright (SAP SuccessFactors)."""
+    print("  Verificando: WFP (Playwright)")
+
+    WFP_URL = (
+        "https://career5.successfactors.eu/career"
+        "?company=C0000168410P&career_ns=job_listing_summary"
+    )
+    MANUAL_FALLBACK = [{
+        "title": "WFP — Ver vagas no site (filtrar por Brazil)",
+        "url": WFP_URL,
+        "source": "WFP",
+        "location": "Brasil (verificar no site)",
+        "_manual": True,
+    }]
+
+    if not PLAYWRIGHT_AVAILABLE:
+        print("    -> Playwright não disponível. Usando link manual.")
+        return MANUAL_FALLBACK
+
+    try:
+        with sync_playwright() as pw:
+            browser = pw.chromium.launch(headless=True)
+            page = browser.new_page(
+                user_agent=HEADERS["User-Agent"],
+                locale="pt-BR",
+            )
+            page.goto(WFP_URL, wait_until="networkidle", timeout=60_000)
+
+            # Aguarda os cards de vaga carregarem
+            try:
+                page.wait_for_selector("a[data-oid], .jobTitle, .job-title, a[id*='job']",
+                                       timeout=20_000)
+            except Exception:
+                pass  # Tenta parsear mesmo sem confirmação
+
+            html = page.content()
+            browser.close()
+
+        soup = BeautifulSoup(html, "lxml")
+        jobs: list[dict] = []
+        seen: set[str] = set()
+
+        # SuccessFactors renderiza links com data-oid ou classes específicas
+        for link in soup.select(
+            "a[data-oid], a.jobTitle, a.job-title, "
+            "td.jobTitle a, .joblisting a, #jobResultsList a"
+        ):
+            title = link.get_text(strip=True)
+            href  = link.get("href", "")
+            if not title or len(title) < 10 or href in seen:
+                continue
+            if not href.startswith("http"):
+                href = "https://career5.successfactors.eu" + href
+            seen.add(href)
+
+            # Localização: procura no elemento pai
+            parent = link.find_parent(["tr", "li", "div"])
+            location = ""
+            if parent:
+                loc = parent.find(class_=lambda c: c and "location" in c.lower())
+                if loc:
+                    location = loc.get_text(strip=True)
+
+            # Inclui somente vagas no Brasil ou sem localização determinada
+            if location and not _is_brazil(location):
+                continue
+
+            jobs.append({
+                "title": title,
+                "url": href,
+                "source": "WFP",
+                "location": location or "Brazil",
+            })
+
+        if jobs:
+            print(f"    -> {len(jobs)} vaga(s) encontrada(s) [Playwright]")
+            return jobs
+
+        print("    -> Nenhuma vaga encontrada via Playwright. Usando link manual.")
+        return MANUAL_FALLBACK
+
+    except Exception as e:
+        print(f"    -> Erro Playwright WFP: {e}. Usando link manual.")
+        return MANUAL_FALLBACK
+
+
 # Mapa de parsers específicos por nome (case-insensitive)
 SPECIFIC_PARSERS = {
     "onu brasil":  fetch_onu_brasil,
@@ -448,6 +542,7 @@ SPECIFIC_PARSERS = {
     "iadb":        fetch_iadb,
     "unitalent":   fetch_untalent,
     "untalent":    fetch_untalent,
+    "wfp":         fetch_wfp,
 }
 
 # ---------------------------------------------------------------------------
