@@ -402,12 +402,32 @@ def fetch_untalent(keywords: list) -> list[dict]:
         # Título deve conter ao menos uma keyword (se definidas)
         return not keywords or contains_keyword(title, keywords)
 
+    MANUAL_FALLBACK = [{
+        "title": "UNTalent — Ver vagas no Brasil (Consultant/Senior)",
+        "url": "https://untalent.org/jobs?location=Brazil",
+        "source": "UNTalent.org",
+        "location": "Brasil (verificar no site)",
+        "_manual": True,
+    }]
+
+    # Headers alternados para evitar bloqueio
+    headers_alt = {
+        **HEADERS,
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Connection": "keep-alive",
+        "Referer": "https://www.google.com/",
+    }
+
     # Tenta API JSON primeiro
     try:
         resp = requests.get(
             "https://untalent.org/api/jobs?location=Brazil&limit=50",
-            headers=HEADERS, timeout=REQUEST_TIMEOUT
+            headers=headers_alt, timeout=REQUEST_TIMEOUT
         )
+        if resp.status_code == 403:
+            print("    -> UNTalent bloqueou (403). Usando link manual.")
+            return MANUAL_FALLBACK
         if resp.status_code == 200 and "application/json" in resp.headers.get("content-type", ""):
             data = resp.json()
             jobs = []
@@ -426,10 +446,20 @@ def fetch_untalent(keywords: list) -> list[dict]:
         pass
 
     # Fallback HTML
-    soup = fetch_html("https://untalent.org/jobs?location=Brazil")
-    if not soup:
-        print("    -> 0 vaga(s) encontrada(s)")
-        return []
+    try:
+        resp_html = requests.get(
+            "https://untalent.org/jobs?location=Brazil",
+            headers=headers_alt, timeout=REQUEST_TIMEOUT
+        )
+        if resp_html.status_code == 403:
+            print("    -> UNTalent bloqueou HTML (403). Usando link manual.")
+            return MANUAL_FALLBACK
+        resp_html.raise_for_status()
+        soup = BeautifulSoup(resp_html.text, "lxml")
+    except Exception as e:
+        print(f"    -> Erro ao acessar UNTalent: {e}. Usando link manual.")
+        return MANUAL_FALLBACK
+
     jobs = []
     seen_hrefs: set[str] = set()
     for link in soup.select("a.job-link, .job-title a, h3 a, h2 a, a[href*='/jobs/']"):
@@ -444,6 +474,11 @@ def fetch_untalent(keywords: list) -> list[dict]:
         if passes_filter(title, loc):
             jobs.append({"title": title, "url": href, "source": "UNTalent.org",
                          "location": loc or "Brazil"})
+
+    if not jobs:
+        print("    -> Nenhuma vaga encontrada. Usando link manual.")
+        return MANUAL_FALLBACK
+
     print(f"    -> {len(jobs)} vaga(s) encontrada(s)")
     return jobs
 
