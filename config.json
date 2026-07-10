@@ -27,6 +27,13 @@
       "keywords": ["Consultant", "Senior"]
     },
     {
+      "name": "PNUD BRASIL",
+      "url": "https://parceiros.undp.org.br/opportunities",
+      "enabled": true,
+      "notes": "PNUD Brasil — contratos e consultorias via Playwright (Angular SPA)",
+      "keywords": []
+    },
+    {
       "name": "ONU",
       "url": "https://careers.un.org/jobopening",
       "enabled": true,

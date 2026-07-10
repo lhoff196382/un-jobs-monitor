@@ -13,6 +13,7 @@ FONTES A CONSULTAR (busque em cada uma):
 3. ONU Brasil — https://brasil.un.org/pt-br/jobs
 4. Carreiras ONU — https://careers.un.org/jobopening (filtrar duty station: Brazil)
 5. PNUD — https://estm.fa.em2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1 (filtrar Brazil)
+5b. PNUD Brasil (contratos/consultorias) — https://parceiros.undp.org.br/opportunities
 6. UNTalent — https://untalent.org/jobs?location=Brazil (somente Consultant ou Senior)
 7. BID/IADB — https://jobs.iadb.org/go/All-Jobs/9638000/ (filtrar Brazil)
 8. OIM Brasil — https://brazil.iom.int/pt-br/vagas

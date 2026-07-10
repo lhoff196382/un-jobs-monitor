@@ -570,6 +570,94 @@ def fetch_wfp(_keywords: list) -> list[dict]:
         return MANUAL_FALLBACK
 
 
+def fetch_pnud_br(_keywords: list) -> list[dict]:
+    """PNUD Brasil (parceiros.undp.org.br) — oportunidades via Playwright (Angular SPA)."""
+    print("  Verificando: PNUD Brasil / parceiros.undp.org.br (Playwright)")
+
+    URL = "https://parceiros.undp.org.br/opportunities"
+    MANUAL_FALLBACK = [{
+        "title": "PNUD Brasil — Oportunidades (contratos e consultorias)",
+        "url": URL,
+        "source": "PNUD Brasil",
+        "location": "Brasil",
+        "_manual": True,
+    }]
+
+    if not PLAYWRIGHT_AVAILABLE:
+        print("    -> Playwright não disponível. Usando link manual.")
+        return MANUAL_FALLBACK
+
+    try:
+        with sync_playwright() as pw:
+            browser = pw.chromium.launch(headless=True)
+            page = browser.new_page(
+                user_agent=HEADERS["User-Agent"],
+                locale="pt-BR",
+            )
+            page.goto(URL, wait_until="networkidle", timeout=60_000)
+
+            # Angular precisa de tempo extra para renderizar os cards
+            try:
+                page.wait_for_selector(
+                    "mat-card, app-opportunity-card, .opportunity-card, "
+                    ".opportunity-title, [class*='opportunity'] a, "
+                    "h2 a, h3 a, .card-title a",
+                    timeout=25_000,
+                )
+            except Exception:
+                pass
+
+            html = page.content()
+            browser.close()
+
+        soup = BeautifulSoup(html, "lxml")
+        jobs: list[dict] = []
+        seen: set[str] = set()
+
+        # Seletores para apps Angular Material + genéricos
+        for link in soup.select(
+            "mat-card a, app-opportunity-card a, "
+            ".opportunity-card a, [class*='opportunity'] a, "
+            ".card-title a, h2 a, h3 a, h4 a"
+        ):
+            title = link.get_text(strip=True)
+            href  = link.get("href", "")
+            if not title or len(title) < 10 or href in seen:
+                continue
+            # Ignora links de navegação/menu
+            if any(x in href.lower() for x in ["login", "register", "#", "logout", "profile"]):
+                continue
+            seen.add(href)
+            if not href.startswith("http"):
+                href = "https://parceiros.undp.org.br" + href
+
+            parent = link.find_parent(["mat-card", "div", "li", "article"])
+            location = "Brasil"
+            if parent:
+                loc = parent.find(class_=lambda c: c and any(
+                    x in c.lower() for x in ["location", "local", "city", "estado"]))
+                if loc:
+                    location = loc.get_text(strip=True) or "Brasil"
+
+            jobs.append({
+                "title": title,
+                "url": href,
+                "source": "PNUD Brasil",
+                "location": location,
+            })
+
+        if jobs:
+            print(f"    -> {len(jobs)} oportunidade(s) encontrada(s) [Playwright]")
+            return jobs
+
+        print("    -> Nenhuma oportunidade encontrada via Playwright. Usando link manual.")
+        return MANUAL_FALLBACK
+
+    except Exception as e:
+        print(f"    -> Erro Playwright PNUD Brasil: {e}. Usando link manual.")
+        return MANUAL_FALLBACK
+
+
 # Mapa de parsers específicos por nome (case-insensitive)
 SPECIFIC_PARSERS = {
     "onu brasil":  fetch_onu_brasil,
@@ -578,6 +666,8 @@ SPECIFIC_PARSERS = {
     "unitalent":   fetch_untalent,
     "untalent":    fetch_untalent,
     "wfp":         fetch_wfp,
+    "pnud brasil": fetch_pnud_br,
+    "parceiros":   fetch_pnud_br,
 }
 
 # ---------------------------------------------------------------------------
