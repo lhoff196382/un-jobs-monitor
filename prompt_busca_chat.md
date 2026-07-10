@@ -10,6 +10,7 @@ Procure vagas de emprego e consultoria abertas AGORA em organismos internacionai
 FONTES A CONSULTAR (busque em cada uma):
 1. ReliefWeb — https://reliefweb.int/jobs?advanced-search=%28C46%29 (vagas no Brasil)
 2. UNJobs — https://unjobs.org/duty_stations/brazil
+2b. UNJobNet — https://www.unjobnet.org/countries/brazil
 3. ONU Brasil — https://brasil.un.org/pt-br/jobs
 4. Carreiras ONU — https://careers.un.org/jobopening (filtrar duty station: Brazil)
 5. PNUD — https://estm.fa.em2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1 (filtrar Brazil)

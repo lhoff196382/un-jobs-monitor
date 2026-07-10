@@ -570,6 +570,57 @@ def fetch_wfp(_keywords: list) -> list[dict]:
         return MANUAL_FALLBACK
 
 
+def fetch_unjobnet(_keywords: list) -> list[dict]:
+    """UNJobNet — vagas no Brasil (HTML estático, scraping direto)."""
+    print("  Verificando: UNJobNet.org / Brazil")
+    try:
+        resp = requests.get(
+            "https://www.unjobnet.org/countries/brazil",
+            headers=HEADERS, timeout=REQUEST_TIMEOUT
+        )
+        resp.raise_for_status()
+    except requests.RequestException as e:
+        print(f"  [ERRO] UNJobNet: {e}")
+        return []
+
+    soup = BeautifulSoup(resp.text, "lxml")
+    jobs: list[dict] = []
+    seen: set[str] = set()
+
+    for link in soup.select("a[href^='/jobs/detail/']"):
+        title = link.get_text(strip=True)
+        href  = link.get("href", "")
+        if not title or len(title) < 8 or href in seen:
+            continue
+        seen.add(href)
+        full_url = "https://www.unjobnet.org" + href
+
+        # Localização: procura no elemento pai
+        parent = link.find_parent(["li", "div", "article", "tr"])
+        location = ""
+        if parent:
+            loc = parent.find(class_=lambda c: c and any(
+                x in c.lower() for x in ["location", "country", "duty", "local"]))
+            location = loc.get_text(strip=True) if loc else ""
+
+        # Infere localização pelo título quando não achada
+        if not location:
+            for term in BRAZIL_TERMS:
+                if term in title.lower():
+                    location = "Brazil"
+                    break
+
+        jobs.append({
+            "title": title,
+            "url": full_url,
+            "source": "UNJobNet",
+            "location": location or "Brazil",
+        })
+
+    print(f"    -> {len(jobs)} vaga(s) encontrada(s)")
+    return jobs
+
+
 def fetch_pnud_br(_keywords: list) -> list[dict]:
     """PNUD Brasil (parceiros.undp.org.br) — oportunidades via Playwright (Angular SPA)."""
     print("  Verificando: PNUD Brasil / parceiros.undp.org.br (Playwright)")
@@ -668,6 +719,7 @@ SPECIFIC_PARSERS = {
     "wfp":         fetch_wfp,
     "pnud brasil": fetch_pnud_br,
     "parceiros":   fetch_pnud_br,
+    "unjobnet":    fetch_unjobnet,
 }
 
 # ---------------------------------------------------------------------------

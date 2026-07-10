@@ -27,6 +27,13 @@
       "keywords": ["Consultant", "Senior"]
     },
     {
+      "name": "UNJOBNET",
+      "url": "https://www.unjobnet.org/countries/brazil",
+      "enabled": true,
+      "notes": "Agregador ONU — vagas filtradas por Brazil, HTML estático",
+      "keywords": []
+    },
+    {
       "name": "PNUD BRASIL",
       "url": "https://parceiros.undp.org.br/opportunities",
       "enabled": true,
