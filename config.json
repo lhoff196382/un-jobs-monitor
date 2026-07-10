@@ -41,29 +41,6 @@
       "keywords": []
     },
     {
-      "name": "ONU",
-      "url": "https://careers.un.org/jobopening",
-      "enabled": true,
-      "notes": "",
-      "keywords": []
-    },
-    {
-      "name": "OIM BRASIL",
-      "url": "https://brazil.iom.int/pt-br/vagas",
-      "enabled": true,
-      "manual": true,
-      "notes": "Site bloqueia scraping (403) — link manual no e-mail",
-      "keywords": []
-    },
-    {
-      "name": "OIT",
-      "url": "https://jobs.ilo.org/search/?q=&locationsearch=Brazil",
-      "enabled": true,
-      "manual": true,
-      "notes": "Vagas renderizadas por JavaScript — link manual filtrado por Brazil",
-      "keywords": []
-    },
-    {
       "name": "BANCO MUNDIAL",
       "url": "https://worldbankgroup.csod.com/ats/careersite/search.aspx?site=1&c=worldbankgroup",
       "enabled": true,
@@ -77,21 +54,6 @@
       "enabled": true,
       "manual": true,
       "notes": "Agregador ONU/ONGs — vagas filtradas por Brazil, JavaScript — link manual no e-mail",
-      "keywords": []
-    },
-    {
-      "name": "DEVEX",
-      "url": "https://www.devex.com/jobs/search?country_id=br",
-      "enabled": true,
-      "manual": true,
-      "notes": "Plataforma de vagas internacionais — bloqueia scraping (403) — link manual no e-mail",
-      "keywords": []
-    },
-    {
-      "name": "WFP",
-      "url": "https://career5.successfactors.eu/career?company=C0000168410P&career_ns=job_listing_summary",
-      "enabled": true,
-      "notes": "World Food Programme — SAP SuccessFactors via Playwright (headless Chrome)",
       "keywords": []
     },
     {

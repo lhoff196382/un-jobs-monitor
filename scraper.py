@@ -716,7 +716,6 @@ SPECIFIC_PARSERS = {
     "iadb":        fetch_iadb,
     "unitalent":   fetch_untalent,
     "untalent":    fetch_untalent,
-    "wfp":         fetch_wfp,
     "pnud brasil": fetch_pnud_br,
     "parceiros":   fetch_pnud_br,
     "unjobnet":    fetch_unjobnet,
@@ -914,10 +913,6 @@ def main() -> None:
     all_jobs: list[dict] = []
 
     all_jobs.extend(fetch_reliefweb(keywords))
-    time.sleep(2)
-    all_jobs.extend(fetch_unjobs_org(keywords))
-    time.sleep(2)
-    all_jobs.extend(fetch_undp(keywords))
     time.sleep(2)
 
     for source in config.get("custom_sources", []):
