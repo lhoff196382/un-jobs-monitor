@@ -57,6 +57,14 @@
       "keywords": []
     },
     {
+      "name": "UNIDO",
+      "url": "https://www.unido.org/get-involved/work-unido/vacancies",
+      "enabled": true,
+      "manual": true,
+      "notes": "UNIDO — bloqueia scraping (403). Vagas no Brasil raras; verificar manualmente.",
+      "keywords": []
+    },
+    {
       "name": "CDB",
       "url": "https://career5.successfactors.eu/career?company=caribbeandP2&career_ns=job_listing_summary",
       "enabled": true,
