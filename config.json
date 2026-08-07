@@ -27,6 +27,13 @@
       "keywords": ["Consultant", "Senior"]
     },
     {
+      "name": "WRI BRASIL",
+      "url": "https://www.wribrasil.org.br/trabalhe-conosco",
+      "enabled": true,
+      "notes": "World Resources Institute Brasil — scraping direto da página (links Workday)",
+      "keywords": []
+    },
+    {
       "name": "UNJOBNET",
       "url": "https://www.unjobnet.org/countries/brazil",
       "enabled": true,

@@ -570,6 +570,46 @@ def fetch_wfp(_keywords: list) -> list[dict]:
         return MANUAL_FALLBACK
 
 
+def fetch_wri(_keywords: list) -> list[dict]:
+    """WRI Brasil — vagas scrapeadas de wribrasil.org.br/trabalhe-conosco (links Workday)."""
+    print("  Verificando: WRI Brasil (wribrasil.org.br)")
+    try:
+        resp = requests.get(
+            "https://www.wribrasil.org.br/trabalhe-conosco",
+            headers=HEADERS, timeout=REQUEST_TIMEOUT
+        )
+        resp.raise_for_status()
+    except requests.RequestException as e:
+        print(f"  [ERRO] WRI Brasil: {e}")
+        return []
+
+    soup = BeautifulSoup(resp.text, "lxml")
+    jobs: list[dict] = []
+    seen: set[str] = set()
+
+    for link in soup.find_all("a", href=lambda h: h and "wri.wd501.myworkdayjobs.com" in h):
+        title = link.get_text(strip=True)
+        href  = link.get("href", "")
+        if not title or len(title) < 5 or href in seen:
+            continue
+        seen.add(href)
+        # Localização: extraída da URL (ex: /So-Paulo-Brazil/ → São Paulo, Brazil)
+        location = "São Paulo, Brazil"
+        if "brasilia" in href.lower() or "brasília" in href.lower():
+            location = "Brasília, Brazil"
+        elif "rio-de-janeiro" in href.lower():
+            location = "Rio de Janeiro, Brazil"
+        jobs.append({
+            "title": title,
+            "url": href,
+            "source": "WRI Brasil",
+            "location": location,
+        })
+
+    print(f"    -> {len(jobs)} vaga(s) encontrada(s)")
+    return jobs
+
+
 def fetch_unjobnet(_keywords: list) -> list[dict]:
     """UNJobNet — vagas no Brasil (HTML estático, scraping direto)."""
     print("  Verificando: UNJobNet.org / Brazil")
@@ -719,6 +759,7 @@ SPECIFIC_PARSERS = {
     "pnud brasil": fetch_pnud_br,
     "parceiros":   fetch_pnud_br,
     "unjobnet":    fetch_unjobnet,
+    "wri":         fetch_wri,
 }
 
 # ---------------------------------------------------------------------------
