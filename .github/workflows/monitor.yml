@@ -2,9 +2,10 @@ name: Monitor Vagas ONU Brasil
 
 on:
   schedule:
-    # A cada 2 dias às 09:00 horário de Brasília (12:00 UTC)
+    # Toda segunda-feira às 09:00 horário de Brasília (12:00 UTC)
     # GitHub Actions usa UTC. BRT = UTC-3
-    - cron: "0 12 */2 * *"
+    # Retomada a partir de 11/11/2026 (paused_until no config.json controla o envio)
+    - cron: "0 12 * * 1"
   workflow_dispatch:   # permite rodar manualmente pelo GitHub
 
 permissions:

@@ -948,6 +948,23 @@ def main() -> None:
     print(f"=== Monitor ONU Brasil — {now_utc().strftime('%Y-%m-%d %H:%M UTC')} ===")
 
     config = load_config()
+
+    # --- Pausa programada ---
+    paused_until_str = config.get("paused_until", "")
+    if paused_until_str:
+        try:
+            from datetime import date
+            paused_until = date.fromisoformat(paused_until_str)
+            today = now_utc().date()
+            if today < paused_until:
+                print(f"[PAUSA] Envio suspenso até {paused_until.strftime('%d/%m/%Y')}. "
+                      f"Retomada automática a partir dessa data. Encerrando sem enviar e-mail.")
+                return
+            else:
+                print(f"[INFO] Data de retomada atingida ({paused_until.strftime('%d/%m/%Y')}). Enviando normalmente.")
+        except ValueError:
+            print(f"[AVISO] paused_until inválido no config: {paused_until_str!r}. Ignorando.")
+
     seen = load_seen()
     keywords = config.get("keywords", [])
 
