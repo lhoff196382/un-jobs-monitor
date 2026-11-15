@@ -924,7 +924,12 @@ def send_email(subject: str, html_body: str, cfg: dict) -> None:
     msg["To"]      = to_addr
     msg.attach(MIMEText(html_body, "html", "utf-8"))
 
-    server = smtplib.SMTP(smtp_host, smtp_port, timeout=30)
+    try:
+        server = smtplib.SMTP(smtp_host, smtp_port, timeout=30)
+    except Exception as e:
+        print(f"[ERRO] Não foi possível conectar ao servidor SMTP {smtp_host}:{smtp_port} — {e}")
+        raise
+
     try:
         server.ehlo()
         server.starttls()
@@ -932,12 +937,18 @@ def send_email(subject: str, html_body: str, cfg: dict) -> None:
         server.login(smtp_user, smtp_pass)
         server.sendmail(smtp_user, to_addr, msg.as_string())
         print(f"[OK] E-mail enviado para {to_addr}")
-    except smtplib.SMTPAuthenticationError:
-        print("[ERRO] Autenticação falhou — verifique SMTP_USER e SMTP_PASS.")
+    except smtplib.SMTPAuthenticationError as e:
+        print(f"[ERRO] Autenticação falhou ({e}) — verifique SMTP_USER e SMTP_PASS.")
         print("       Para Gmail use uma Senha de App em: myaccount.google.com/apppasswords")
         raise
+    except Exception as e:
+        print(f"[ERRO] Falha durante envio SMTP: {type(e).__name__}: {e}")
+        raise
     finally:
-        server.quit()
+        try:
+            server.quit()
+        except Exception:
+            pass
 
 
 # ---------------------------------------------------------------------------
